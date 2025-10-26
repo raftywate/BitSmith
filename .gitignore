@@ -1,15 +1,41 @@
-dotnetBitSmith/Migrations/
+# ---------------------------
+# BitSmithApp .gitignore
+# (.NET + Angular)
+# ---------------------------
 
-# FrontEnd
+# === .NET ===
+dotnetBitSmith/bin/
+dotnetBitSmith/obj/
+dotnetBitSmith/.vs/
+dotnetBitSmith/**/*.user
+dotnetBitSmith/**/*.suo
+dotnetBitSmith/**/*.cache
+dotnetBitSmith/**/*.log
+dotnetBitSmith/**/*.dbmdl
+dotnetBitSmith/**/*.bak
+dotnetBitSmith/**/*.swp
+dotnetBitSmith/**/publish/
+dotnetBitSmith/**/Debug/
+dotnetBitSmith/**/Release/
 
+# === Angular ===
 angularBitSmith/node_modules/
-angularBitSmith/e2e
-angularBitSmith/karma.conf.js
-angularBitSmith/tsconfig.spec.json
-angularBitSmith/package-lock.json
-angularBitSmith/src/global.ts
-angularBitSmith/.editorconfig
-angularBitSmith/.browserslistrc
-angularBitSmith/src/test.ts
-angularBitSmith/src/environment
-environments
+angularBitSmith/dist/
+angularBitSmith/tmp/
+angularBitSmith/.angular/
+angularBitSmith/src/environments/*.ts
+
+# === System / IDE ===
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# === Logs / Misc ===
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === Environment / Secrets ===
+.env
