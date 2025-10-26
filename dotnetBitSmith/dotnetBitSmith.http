@@ -1,0 +1,6 @@
+@dotnetBitSmith_HostAddress = http://localhost:5078
+
+GET {{dotnetBitSmith_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

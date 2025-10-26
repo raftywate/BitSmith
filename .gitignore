@@ -1,0 +1,15 @@
+dotnetBitSmith/Migrations/
+
+# FrontEnd
+
+angularBitSmith/node_modules/
+angularBitSmith/e2e
+angularBitSmith/karma.conf.js
+angularBitSmith/tsconfig.spec.json
+angularBitSmith/package-lock.json
+angularBitSmith/src/global.ts
+angularBitSmith/.editorconfig
+angularBitSmith/.browserslistrc
+angularBitSmith/src/test.ts
+angularBitSmith/src/environment
+environments
