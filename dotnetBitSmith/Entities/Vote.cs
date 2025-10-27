@@ -1,32 +1,28 @@
 using System;
+using dotnetBitSmith.Entities.Enums;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace dotnetBitSmith.Entities {
-    public class CodeSnippet {
+    public class Vote {
         [Key]
         public Guid Id { get; set; } = Guid.NewGuid();
 
         [Required]
-        [StringLength(100)]
-        public string Title { get; set; }
+        public Guid EntityId { get; set; }
 
         [Required]
-        [StringLength(50)]
-        public string Language { get; set; }
+        [Column(TypeName = "nvarchar(20)")]
+        public VotableEntityType EntityType { get; set; }
 
         [Required]
-        [Column(TypeName = "nvarchar(max)")]
-        public string Code { get; set; }
-
-        [Required]
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
-        // --- Foreign Key ---
+        public bool IsUpvote { get; set; }
+        
+        //---Foreign Keys---
         [Required]
         public Guid UserId { get; set; }
 
-        // --- Navigation Property ---
+        //---Navigation Property---
         [ForeignKey(nameof(UserId))]
         public virtual User User { get; set; }
     }

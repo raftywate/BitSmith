@@ -13,14 +13,12 @@ namespace dotnetBitSmith.Entities {
 
         [Required]
         [StringLength(50)]
-
         //slug is a url format version of the problem name 
         // i.e. "dynamic-programming" is the slug version of "dynamic programming"
         //"binary-search" is for "binary search"
         public string Slug { get; set; }
 
         //--Navigation properties--
-
         public virtual ICollection<ProblemCategory> ProblemCategories { get; set; } = new List<ProblemCategory>();
         
     }

@@ -1,6 +1,5 @@
 namespace dotnetBitSmith.Entities.Enums {
-    public enum SubmissionStatus
-    {
+    public enum SubmissionStatus {
         Pending,
         Running,
         Accepted,

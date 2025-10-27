@@ -42,7 +42,7 @@ namespace dotnetBitSmith.Entities {
 
         public DateTime? LastLoginAt { get; set; }
 
-        //Navigation Properties
+        //---Navigation Properties---
         //virtual here is for efficiency since it enables lazy loading. 
         //This proxy code will intercept the request and "lazily" run a separate query against the database to fetch all the snippets for that user.
         public virtual ICollection<CodeSnippet> CodeSnippets { get; set; } = new List<CodeSnippet>();

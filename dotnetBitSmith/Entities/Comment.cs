@@ -3,16 +3,11 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace dotnetBitSmith.Entities {
-    public class Solution {
+    public class Comment {
         [Key]
         public Guid Id { get; set; } = Guid.NewGuid();
 
         [Required]
-        [StringLength(100)]
-        public string Title { get; set; }
-
-        [Required]
-
         [Column(TypeName = "nvarchar(max)")]
         public string Content { get; set; }
 
@@ -22,19 +17,25 @@ namespace dotnetBitSmith.Entities {
         //---Foreign Keys---
 
         [Required]
-        public Guid ProblemId { get; set; }
-
-        [Required]
         public Guid UserId { get; set; }
 
-        //---Navigation Property---
+        [Required]
+        public Guid SolutionId { get; set; }
 
-        [ForeignKey(nameof(ProblemId))]
-        public virtual Problem Problem { get; set; }
+        public Guid? ParentCommentId { get; set; }
+
+        //---Navigation Properties---
 
         [ForeignKey(nameof(UserId))]
         public virtual User User { get; set; }
-        public virtual ICollection<Vote> Votes { get; set; }
-        public virtual ICollection<Comment> Comments { get; set; }
+
+        [ForeignKey(nameof(SolutionId))]
+        public virtual Solution Solution { get; set; }
+
+        [ForeignKey(nameof(ParentCommentId))]
+        public virtual Comment ParentComment { get; set; }
+
+        public ICollection<Comment> Replies { get; set; }
+        public ICollection<Vote> Votes { get; set; }
     }
 }
