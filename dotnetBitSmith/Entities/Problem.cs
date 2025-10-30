@@ -31,8 +31,7 @@ namespace dotnetBitSmith.Entities {
         //---Foreign Keys---
         //The user(admin) who authored the problem
 
-        [Required]
-        public Guid AuthorId { get; set; }
+        public Guid? AuthorId { get; set; }
 
         //--Navigation Properties---
 

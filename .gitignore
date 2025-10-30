@@ -17,6 +17,7 @@ dotnetBitSmith/**/*.swp
 dotnetBitSmith/**/publish/
 dotnetBitSmith/**/Debug/
 dotnetBitSmith/**/Release/
+dotnetBitSmith/Migrations
 
 # === Angular ===
 angularBitSmith/node_modules/

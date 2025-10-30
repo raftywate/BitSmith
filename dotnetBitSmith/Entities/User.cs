@@ -47,6 +47,8 @@ namespace dotnetBitSmith.Entities {
         //This proxy code will intercept the request and "lazily" run a separate query against the database to fetch all the snippets for that user.
         public virtual ICollection<CodeSnippet> CodeSnippets { get; set; } = new List<CodeSnippet>();
         public virtual ICollection<Submission> Submissions { get; set; } = new List<Submission>();
+        public virtual ICollection<Problem> ProblemsAuthored { get; set; } = new List<Problem>();
+        public virtual ICollection<Comment> CommentsAuthored { get; set; } = new List<Comment>();
 
         [NotMapped] //Not stored in the database, just a helper method to check if the user is Admin
         public bool IsAdmin => UserRole.Equals("Admin", StringComparison.OrdinalIgnoreCase);

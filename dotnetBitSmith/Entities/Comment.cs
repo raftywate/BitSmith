@@ -16,8 +16,7 @@ namespace dotnetBitSmith.Entities {
         
         //---Foreign Keys---
 
-        [Required]
-        public Guid UserId { get; set; }
+        public Guid? UserId { get; set; }
 
         [Required]
         public Guid SolutionId { get; set; }
@@ -35,7 +34,7 @@ namespace dotnetBitSmith.Entities {
         [ForeignKey(nameof(ParentCommentId))]
         public virtual Comment ParentComment { get; set; }
 
-        public ICollection<Comment> Replies { get; set; }
-        public ICollection<Vote> Votes { get; set; }
+        public ICollection<Comment> Replies { get; set; } = new List<Comment>();
+        public ICollection<Vote> Votes { get; set; } = new List<Vote>();
     }
 }

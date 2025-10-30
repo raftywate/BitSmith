@@ -42,12 +42,35 @@ namespace dotnetBitSmith.Data {
                 .HasForeignKey(c => c.ParentCommentId)
                 .OnDelete(DeleteBehavior.ClientSetNull); // Prevents cascade delete cycles
 
+            modelBuilder.Entity<Problem>()
+                .HasOne(p => p.Author)
+                .WithMany(u => u.ProblemsAuthored)
+                .HasForeignKey(p => p.AuthorId)
+                .OnDelete(DeleteBehavior.ClientSetNull); // Use ClientSetNull for nullable foreign key
+            
+            modelBuilder.Entity<Comment>()
+                .HasOne(c => c.User)
+                .WithMany(u => u.CommentsAuthored)
+                .HasForeignKey(c => c.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull); // Breaks the User->Solution->Comment cascade cycle
+
             // 3. Configure Enums to be stored as strings (e.g., "Easy", "Pending")
             modelBuilder.Entity<Problem>()
                 .Property(p => p.Difficulty)
                 .HasConversion(
                     v => v.ToString(),
-                    v => (ProblemDifficulty)Enum.Parse(typeof(ProblemDifficulty), v));
+                    v => (ProblemDifficulty)Enum.Parse(typeof(ProblemDifficulty), v));//Converts the database string FROM the database back TO your C# enum
+                    /*
+                    Enum.Parse(typeof(ProblemDifficulty), v)
+                    Enum.Parse(...): This is a built-in C# method that does the opposite of .ToString(). 
+                    It takes a string and tries to find a matching value in an enum.
+                    typeof(ProblemDifficulty): This is the first argument. It tells the method, 
+                    "The enum I want you to search inside is ProblemDifficulty."
+                    v: This is the second argument. It's the string we're giving it to parse (e.g., "Easy").
+                    So, Enum.Parse(typeof(ProblemDifficulty), "Easy") finds the matching enum and returns it.
+                    But there's one small catch: Enum.Parse is an old method, so it returns a generic object type, 
+                    not a specific ProblemDifficulty type.
+                    */
 
             modelBuilder.Entity<Submission>()
                 .Property(s => s.Status)
@@ -67,7 +90,8 @@ namespace dotnetBitSmith.Data {
                 .IsUnique();
 
             modelBuilder.Entity<User>()
-                .HasIndex(u => u.Email)
+            //HasIndex create a separate, sorted list(the index) that just contains this field and points to the user's row to enable fast searching
+                .HasIndex(u => u.Email) 
                 .IsUnique();
 
             // 5. Configure the Vote entity's polymorphic relationship
