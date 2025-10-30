@@ -68,9 +68,9 @@ namespace dotnetBitSmith.Services {
         private AuthResponseModel GenerateJwtToken(User user) {
             // Get settings from appsettings.json
             var jwtSettings = _configuration.GetSection("JwtSettings");
-            var secretKey = jwtSettings["Key"];
-            var issuer = jwtSettings["Issuer"];
-            var audience = jwtSettings["Audience"];
+            var secretKey   = jwtSettings["Key"];
+            var issuer      = jwtSettings["Issuer"];
+            var audience    = jwtSettings["Audience"];
 
             if (string.IsNullOrEmpty(secretKey)) {
                 throw new InvalidOperationException("JWT Secret Key is not configured in appsettings.json");
