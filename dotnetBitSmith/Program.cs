@@ -7,6 +7,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 
+//When in the "Development" environment, this line automatically does two things:
+//It loads appsettings.json.
+//It then automatically loads User Secrets file, overriding any settings from the first file.
+//So, when AuthService asks for JwtSettings:Key, the configuration manager will find it in the
+//User Secrets and provide it.
 var builder = WebApplication.CreateBuilder(args);
 
 // --- Add services to the container ---

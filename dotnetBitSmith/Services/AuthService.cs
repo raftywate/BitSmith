@@ -23,24 +23,20 @@ namespace dotnetBitSmith.Services {
             _configuration = configuration;
         }
 
-        public async Task<AuthResponseModel> RegisterAsync(UserRegisterModel model)
-        {
+        public async Task<AuthResponseModel> RegisterAsync(UserRegisterModel model) {
             var userExists = _context.Users.AnyAsync(u => u.Email == model.Email);
-            if (userExists != null)
-            {
+            if (userExists == null) {
                 throw new DuplicateUserException("User with this email already exists.");
             }
 
             userExists = _context.Users.AnyAsync(u => u.Username == model.Username);
-            if (userExists != null)
-            {
+            if (userExists == null) {
                 throw new DuplicateUserException("User with this username already exists.");
             }
 
             string passwordHash = BCrypt.Net.BCrypt.HashPassword(model.Password);
 
-            var user = new User
-            {
+            var user = new User {
                 Id = Guid.NewGuid(),
                 Username = model.Username,
                 Email = model.Email,
