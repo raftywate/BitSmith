@@ -10,8 +10,8 @@ using System.Collections.Generic;
 using dotnetBitSmith.Models.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.Extensions.Configuration;
 using System.IdentityModel.Tokens.Jwt;
+using Microsoft.Extensions.Configuration;
 
 namespace dotnetBitSmith.Services {
     public class AuthService : IAuthService {

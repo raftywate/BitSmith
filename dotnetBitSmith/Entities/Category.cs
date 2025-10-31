@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations;
 namespace dotnetBitSmith.Entities {
     public class Category {
         [Key]
-        public Guid ProblemId { get; set; } = Guid.NewGuid();
+        public Guid Id { get; set; } = Guid.NewGuid();
 
         [Required]
         [StringLength(50)]

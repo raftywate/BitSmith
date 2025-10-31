@@ -7,7 +7,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace dotnetBitSmith.Entities {
     public class Problem {
         [Key]
-        public Guid ProblemId { get; set; } = Guid.NewGuid();
+        public Guid Id { get; set; } = Guid.NewGuid();
 
         [Required]
         [StringLength(100)]
