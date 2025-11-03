@@ -1,10 +1,7 @@
-using System;
-using System.Text;
 using dotnetBitSmith.Data;
 using dotnetBitSmith.Entities;
 using dotnetBitSmith.Exceptions;
 using dotnetBitSmith.Interfaces;
-using dotnetBitSmith.Middleware;
 using dotnetBitSmith.Models.Problems;
 using Microsoft.EntityFrameworkCore;
 

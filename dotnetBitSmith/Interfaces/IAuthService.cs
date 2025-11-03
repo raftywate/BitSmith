@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using dotnetBitSmith.Models.Auth;
 
 namespace dotnetBitSmith.Interfaces {

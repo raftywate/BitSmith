@@ -1,5 +1,3 @@
-using System;
-using dotnetBitSmith.Entities;
 using System.ComponentModel.DataAnnotations;
 
 namespace dotnetBitSmith.Entities {

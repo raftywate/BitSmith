@@ -1,14 +1,12 @@
-using System;
-using System.Threading.Tasks;
-using dotnetBitSmith.Entities;
 using Microsoft.AspNetCore.Mvc;
 using dotnetBitSmith.Interfaces;
-using dotnetBitSmith.Exceptions;
 using dotnetBitSmith.Models.Auth;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace dotnetBitSmith.Controllers {
     [ApiController]
     [Route("api/[controller]")]
+    [EnableRateLimiting("auth-policy")]
     public class AuthController : ControllerBase {
         private readonly IAuthService _authService;
         public AuthController(IAuthService authService) {

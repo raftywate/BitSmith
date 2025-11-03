@@ -1,5 +1,3 @@
-using System;
-
 namespace dotnetBitSmith.Models.Auth {
     public class AuthResponseModel {
         public string Token { get; set; }

@@ -1,11 +1,6 @@
-using System;
 using System.Net;
 using System.Text.Json;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
 using dotnetBitSmith.Exceptions;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.Logging;
 
 namespace dotnetBitSmith.Middleware {
     /// Global exception handling middleware to catch custom exceptions and

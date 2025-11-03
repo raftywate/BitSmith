@@ -1,11 +1,15 @@
 using System.Text;
 using dotnetBitSmith.Data;
+using System.Security.Claims;
 using dotnetBitSmith.Services;
+using Microsoft.OpenApi.Models;
 using dotnetBitSmith.Interfaces;
 using dotnetBitSmith.Middleware;
+using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 //When in the "Development" environment, this line automatically does two things:
@@ -17,44 +21,92 @@ var builder = WebApplication.CreateBuilder(args);
 
 // --- Add services to the container ---
 
-// 1. Get the connection string from appsettings.json
-var connectionString = builder.Configuration.GetConnectionString("connectionString")
-    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
-
-// 2. Register the ApplicationDbContext with the service container
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
-
-// 3. Add Controller support (this is the key line)
-builder.Services.AddControllers().AddJsonOptions(options =>{
+// 1. Add Controller support (this is the key line)
+builder.Services.AddControllers()
+    .AddJsonOptions(options => {
         // This converter allows the API to accept "Easy" as a string
         // and correctly map it to the ProblemDifficulty.Easy enum (value 0).
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-    });;
+    });
+
+
+// 2. Configure Swagger/OpenAPI
+builder.Services.AddSwaggerGen(options => {
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "BitSmith API", Version = "v1" });
+    // Add JWT "Authorize" button to Swagger UI
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme {
+        In = ParameterLocation.Header,
+        Description = "Please enter token",
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        BearerFormat = "JWT",
+        Scheme = "bearer"
+    });
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement { {
+            new OpenApiSecurityScheme {
+                Reference = new OpenApiReference {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            new string[]{ }
+        }
+    });
+});
+
+// 3. Get the connection string from appsettings.json
+var connectionString = builder.Configuration.GetConnectionString("connectionString")
+    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+
+// 4. Register the ApplicationDbContext with the service container
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(connectionString));
+
+//5. Configuring Rate Limiting
+builder.Services.AddRateLimiter(options => {
+    //Defining a "fixed window" policy named "auth-policy"
+    options.AddFixedWindowLimiter(policyName: "auth-policy", opt => {
+        opt.PermitLimit = 10;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        opt.QueueLimit = 5;
+    });
+});
+
+//6. Create JWT Authentication
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options => {
+        var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+        var key = jwtSettings["Key"] ?? throw new InvalidOperationException("JWT Key is not configured.");
+
+        options.TokenValidationParameters = new TokenValidationParameters {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSettings["Issuer"],
+            ValidAudience = jwtSettings["Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
+            NameClaimType = ClaimTypes.Name,
+            RoleClaimType = ClaimTypes.Role,
+        };
+    });
+
+//Configure Authorization
+
+builder.Services.AddAuthorization();
+
+//Configure Custom services(Dependency Injection)
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProblemService, ProblemService>();
-
-builder.Services.AddAuthentication(options => {
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options => {
-    options.TokenValidationParameters = new TokenValidationParameters {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
-        ValidAudience = builder.Configuration["JwtSettings:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:Key"]))
-    };
-});
 // Add Swagger for API documentation
 builder.Services.AddEndpointsApiExplorer();
 // Add Swagger for API documentation
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+//Configure the HTTP request pipeline
 
 var app = builder.Build();
 
@@ -64,12 +116,15 @@ if (app.Environment.IsDevelopment()) {
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
-
+// Adding the custom "safety net" middleware FIRST
 app.UseExceptionHandlingMiddleware();
 
+app.UseHttpsRedirection();
+// Add the Rate Limiter to the pipeline
+app.UseRateLimiter();
+// Add authentication (who are you?)
 app.UseAuthentication();
-
+// Add authorization (are you allowed?)
 app.UseAuthorization();
 
 // This line tells the app to find and use Controller files

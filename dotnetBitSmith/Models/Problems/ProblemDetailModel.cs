@@ -1,4 +1,3 @@
-using System;
 using dotnetBitSmith.Entities.Enums;
 
 namespace dotnetBitSmith.Models.Problems {

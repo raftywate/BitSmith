@@ -1,10 +1,8 @@
-using System;
-using dotnetBitSmith.Services;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using dotnetBitSmith.Interfaces;
 using dotnetBitSmith.Models.Problems;
 using Microsoft.AspNetCore.Authorization;
-using System.Security.Claims;
 
 namespace dotnetBitSmith.Controllers {
     [ApiController]

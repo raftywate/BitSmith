@@ -1,17 +1,13 @@
-using System;
 using System.Text;
 using dotnetBitSmith.Data;
 using System.Security.Claims;
-using System.Threading.Tasks;
 using dotnetBitSmith.Entities;
 using dotnetBitSmith.Exceptions;
 using dotnetBitSmith.Interfaces;
-using System.Collections.Generic;
 using dotnetBitSmith.Models.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
-using Microsoft.Extensions.Configuration;
 
 namespace dotnetBitSmith.Services {
     public class AuthService : IAuthService {

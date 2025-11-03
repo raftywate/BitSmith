@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using dotnetBitSmith.Entities.Enums;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;

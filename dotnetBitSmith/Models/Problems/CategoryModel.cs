@@ -1,4 +1,3 @@
-using System;
 
 namespace dotnetBitSmith.Models.Problems {
     public class CategoryModel {
