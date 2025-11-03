@@ -18,6 +18,7 @@ dotnetBitSmith/**/publish/
 dotnetBitSmith/**/Debug/
 dotnetBitSmith/**/Release/
 dotnetBitSmith/Migrations
+dotnetBitSmith/appsettings.Development.json
 
 # === Angular ===
 angularBitSmith/node_modules/

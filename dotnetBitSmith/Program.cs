@@ -5,6 +5,7 @@ using dotnetBitSmith.Interfaces;
 using dotnetBitSmith.Middleware;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 //When in the "Development" environment, this line automatically does two things:
@@ -25,9 +26,14 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
 
 // 3. Add Controller support (this is the key line)
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(options =>{
+        // This converter allows the API to accept "Easy" as a string
+        // and correctly map it to the ProblemDifficulty.Easy enum (value 0).
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });;
 
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IProblemService, ProblemService>();
 
 builder.Services.AddAuthentication(options => {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
