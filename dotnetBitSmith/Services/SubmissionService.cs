@@ -47,5 +47,26 @@ namespace dotnetBitSmith.Services {
                 CreatedAt = newSubmission.CreatedAt
             };
         }
+
+        public async Task<IEnumerable<SubmissionDetailModel>> GetMySubmissionsForProblemAsync(Guid problemId, Guid userId) {
+            _logger.LogInformation("User {UserId} attempting to access to Submissions for Id {ProblemId}", userId, problemId);
+            
+            var submissions = await _context.Submissions
+            .AsNoTracking()
+            .Where(s => s.UserId == userId && s.ProblemId == problemId)
+            .Select(
+                s => new SubmissionDetailModel {
+                    Id = s.Id,
+                    Code = s.Code,
+                    Language = s.Language,
+                    Status = s.Status,
+                    ExecutionTimeMs = s.ExecutionTimeMs,
+                    ExecutionMemoryKb = s.ExecutionMemoryKb,
+                    CreatedAt = s.CreatedAt
+                })
+            .ToListAsync();
+
+            return submissions;
+        }
     }
 }
