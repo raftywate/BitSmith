@@ -19,11 +19,11 @@ namespace dotnetBitSmith.Entities {
         [Column(TypeName = "nvarchar(20)")]
         public SubmissionStatus Status { get; set; }
 
-        public int? ExecutionTimeMs { get; set; }
-        public int? ExecutionMemoryKb { get; set; }
-
         [Required]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public int? ExecutionTimeMs { get; set; }
+        public int? ExecutionMemoryKb { get; set; }
 
         //---Foreign Keys---
         [Required]

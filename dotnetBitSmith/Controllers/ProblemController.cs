@@ -46,9 +46,7 @@ namespace dotnetBitSmith.Controllers {
             }
 
             var authorId = Guid.Parse(authorIdString);
-            System.Console.WriteLine("THERE!");
             var newProblem = await _problemService.CreateProblemAsync(model, authorId);
-            System.Console.WriteLine("HERE!");
 
             return CreatedAtRoute("GetProblemById", new { problemId = newProblem.Id }, newProblem);
         }

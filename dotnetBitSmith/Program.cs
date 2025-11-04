@@ -71,6 +71,13 @@ builder.Services.AddRateLimiter(options => {
         opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
         opt.QueueLimit = 5;
     });
+
+    options.AddFixedWindowLimiter(policyName: "submit-policy", opt => {
+        opt.PermitLimit = 5;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        opt.QueueLimit = 2;
+    });
 });
 
 //6. Create JWT Authentication
@@ -100,6 +107,7 @@ builder.Services.AddAuthorization();
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProblemService, ProblemService>();
+builder.Services.AddScoped<ISubmissionService, SubmissionService>();
 // Add Swagger for API documentation
 builder.Services.AddEndpointsApiExplorer();
 // Add Swagger for API documentation
