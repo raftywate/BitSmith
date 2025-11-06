@@ -24,7 +24,7 @@ namespace dotnetBitSmith.Controllers {
         [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
         public async Task<ActionResult> CreateSolution(SolutionCreateModel model) {
             var userId = GetUserIdFromToken();
-            var newSolution = _solutionService.CreateSolutionAsync(model, userId);
+            var newSolution = await _solutionService.CreateSolutionAsync(model, userId);
             return Ok(newSolution);
         }
 
