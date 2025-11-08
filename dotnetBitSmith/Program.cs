@@ -112,10 +112,11 @@ builder.Services.AddAuthorization();
 
 //Configure Custom services(Dependency Injection)
 
+builder.Services.AddScoped<IVoteService, VoteService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProblemService, ProblemService>();
-builder.Services.AddScoped<ISubmissionService, SubmissionService>();
 builder.Services.AddScoped<ISolutionService, SolutionService>();
+builder.Services.AddScoped<ISubmissionService, SubmissionService>();
 // Add Swagger for API documentation
 builder.Services.AddEndpointsApiExplorer();
 // Add Swagger for API documentation
