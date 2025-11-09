@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using dotnetBitSmith.Helpers;
 using Microsoft.AspNetCore.Mvc;
 using dotnetBitSmith.Interfaces;
 using dotnetBitSmith.Models.Problems;
@@ -38,14 +39,8 @@ namespace dotnetBitSmith.Controllers {
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<ProblemDetailModel>> CreateProblem([FromBody] ProblemCreateModel model) {
             // The [Authorize] attribute ensures the user is logged in and an Admin.
-            // The "User" object on ControllerBase is auto-filled from their JWT.
-            // We get the "sub" (Subject) claim, which we set to be the User's ID.
-            var authorIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(authorIdString)) {
-                return Unauthorized();
-            }
 
-            var authorId = Guid.Parse(authorIdString);
+            var authorId = User.GetUserId();
             var newProblem = await _problemService.CreateProblemAsync(model, authorId);
 
             return CreatedAtRoute("GetProblemById", new { problemId = newProblem.Id }, newProblem);

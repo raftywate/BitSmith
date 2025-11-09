@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using dotnetBitSmith.Helpers;
 using Microsoft.AspNetCore.Mvc;
 using dotnetBitSmith.Interfaces;
 using dotnetBitSmith.Models.Votes;
@@ -18,18 +19,9 @@ namespace dotnetBitSmith.Controllers {
 
         [HttpPost]
         public async Task<ActionResult<int>> CastVote([FromBody] VoteModel voteModel) {
-            Guid userId = GetUserIdFromToken();
+            Guid userId = User.GetUserId();
             var newVoteCount = await _voteService.CastVoteAsync(voteModel, userId);
             return Ok(newVoteCount);
-        }
-
-        private Guid GetUserIdFromToken() {
-            var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userIdString)) {
-                throw new InvalidOperationException("User ID not found in token. This should not happen.");
-            }
-
-            return Guid.Parse(userIdString);
         }
     }
 }

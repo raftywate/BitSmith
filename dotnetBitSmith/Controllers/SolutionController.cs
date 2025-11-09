@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using dotnetBitSmith.Helpers;
 using dotnetBitSmith.Services;
 using Microsoft.AspNetCore.Mvc;
 using dotnetBitSmith.Interfaces;
@@ -23,7 +24,7 @@ namespace dotnetBitSmith.Controllers {
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
         public async Task<ActionResult> CreateSolution(SolutionCreateModel model) {
-            var userId = GetUserIdFromToken();
+            var userId = User.GetUserId();
             var newSolution = await _solutionService.CreateSolutionAsync(model, userId);
             return Ok(newSolution);
         }
@@ -34,15 +35,6 @@ namespace dotnetBitSmith.Controllers {
         public async Task<ActionResult> GetSolutionForProblem(Guid problemId) {
             var solutions = await _solutionService.GetSolutionsForProblemAsync(problemId);
             return Ok(solutions);
-        }
-
-        private Guid GetUserIdFromToken() {
-            var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userIdString)) {
-                // This should be impossible if [Authorize] is working
-                throw new InvalidOperationException("User ID not found in token. This should not happen.");
-            }
-            return Guid.Parse(userIdString);
         }
     }
 }

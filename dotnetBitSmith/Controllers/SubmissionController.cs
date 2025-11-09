@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using dotnetBitSmith.Helpers;
 using dotnetBitSmith.Services;
 using Microsoft.AspNetCore.Mvc;
 using dotnetBitSmith.Interfaces;
@@ -37,19 +38,10 @@ namespace dotnetBitSmith.Controllers {
         [ProducesResponseType(typeof(IEnumerable<SubmissionDetailModel>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<ActionResult> GetSubmissionForProblem(Guid problemId) {
-            Guid userId = GetUserIdFromToken();
+            Guid userId = User.GetUserId();
 
             var submissions = await _submissionService.GetMySubmissionsForProblemAsync(problemId, userId);
             return Ok(submissions);
-        }
-
-        private Guid GetUserIdFromToken() {
-            var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userIdString)) {
-                throw new InvalidOperationException("User ID not found in token. This should not happen.");
-            }
-
-            return Guid.Parse(userIdString);
         }
     }
 }

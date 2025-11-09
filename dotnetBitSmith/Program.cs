@@ -11,6 +11,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using dotnetBitSmith.Entities;
 
 //When in the "Development" environment, this line automatically does two things:
 //It loads appsettings.json.
@@ -114,6 +115,8 @@ builder.Services.AddAuthorization();
 
 builder.Services.AddScoped<IVoteService, VoteService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<IProblemService, ProblemService>();
 builder.Services.AddScoped<ISolutionService, SolutionService>();
 builder.Services.AddScoped<ISubmissionService, SubmissionService>();
