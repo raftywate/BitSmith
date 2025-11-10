@@ -108,11 +108,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 //Configure Authorization
-
 builder.Services.AddAuthorization();
 
-//Configure Custom services(Dependency Injection)
+builder.Services.AddHttpClient();
 
+//Configure Custom services(Dependency Injection)
 builder.Services.AddScoped<IVoteService, VoteService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
@@ -120,6 +120,8 @@ builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<IProblemService, ProblemService>();
 builder.Services.AddScoped<ISolutionService, SolutionService>();
 builder.Services.AddScoped<ISubmissionService, SubmissionService>();
+builder.Services.AddScoped<ICompilationService, Judge0CompilationService>(); // <-- THIS IS NEW
+
 // Add Swagger for API documentation
 builder.Services.AddEndpointsApiExplorer();
 // Add Swagger for API documentation

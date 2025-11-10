@@ -4,9 +4,10 @@ namespace dotnetBitSmith.Entities.Enums {
         Running,
         Accepted,
         WrongAnswer,
+        RuntimeError,
+        InternalError,
+        CompilationError,
         TimeLimitExceeded,
-        MemoryLimitExceeded,
-        CompilationError
-
+        MemoryLimitExceeded
     }
 }
