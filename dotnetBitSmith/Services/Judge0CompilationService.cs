@@ -42,7 +42,7 @@ namespace dotnetBitSmith.Services {
 
                 // Creating the DTO to send to Judge0
                 var createRequest = new Judge0CreateSubmissionRequest {
-                    Language = submission.Language,
+                    LanguageId = languageId,
                     SourceCode = submission.Code,
                     StandardInputs = null
                 };
