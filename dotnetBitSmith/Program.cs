@@ -19,8 +19,22 @@ using dotnetBitSmith.Entities;
 //So, when AuthService asks for JwtSettings:Key, the configuration manager will find it in the
 //User Secrets and provide it.
 var builder = WebApplication.CreateBuilder(args);
+const string DEV_CORS_POLICY = "AllowDevOrigin";
 
 // --- Add services to the container ---
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(name: DEV_CORS_POLICY,
+      policy =>
+      {
+          // This policy allows your Angular app (at http://localhost:4200)
+          // to talk to your .NET API (at http://localhost:5078)
+          policy.WithOrigins("http://localhost:4200")
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+      });
+});
 
 // 1. Add Controller support (this is the key line)
 builder.Services.AddControllers()
@@ -142,6 +156,9 @@ if (app.Environment.IsDevelopment()) {
 app.UseExceptionHandlingMiddleware();
 
 app.UseHttpsRedirection();
+
+app.UseCors(DEV_CORS_POLICY);
+
 // Add the Rate Limiter to the pipeline
 app.UseRateLimiter();
 // Add authentication (who are you?)

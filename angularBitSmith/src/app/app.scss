@@ -1,0 +1,11 @@
+/* We are using Tailwind CSS, which is loaded by the index.html.
+However, we still need a "host" style to set the
+global background color for our app.
+*/
+
+:host {
+  display: block;
+  background-color: #111827; /* Tailwind's bg-gray-900 */
+  color: #d1d5db; /* Tailwind's text-gray-300 */
+  min-height: 100vh;
+}
