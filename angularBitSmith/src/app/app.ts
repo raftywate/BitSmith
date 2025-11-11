@@ -15,7 +15,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
   styleUrl: './app.scss'
 })
 export class App implements OnInit {
-  protected readonly title = signal('angularBitSmith');
+  protected readonly title = signal('BitSmith');
 
 
   problems = signal<ProblemSummary[]>([]);
