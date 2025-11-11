@@ -40,26 +40,26 @@ namespace dotnetBitSmith.Services {
                 // Map our Language string (e.g., "csharp") to a Judge0 Language ID (e.g., 51)
                 int languageId = GetLanguageId(submission.Language);
 
-                // TODO: Step 2: Create the DTO to send to Judge0
+                // Creating the DTO to send to Judge0
                 var createRequest = new Judge0CreateSubmissionRequest {
                     Language = submission.Language,
                     SourceCode = submission.Code,
                     StandardInputs = null
                 };
 
-                // TODO: Step 3: Create the HttpClient
+                // Creating the HttpClient
                 var client = _httpClientFactory.CreateClient();
-                // ... (Add the default headers for RapidAPI: 'X-RapidAPI-Key' and 'X-RapidAPI-Host')
+                // (Adding the default headers for RapidAPI: 'X-RapidAPI-Key' and 'X-RapidAPI-Host')
 
                 client.DefaultRequestHeaders.Add("X-RapidAPI-Key", _judge0ApiKey);
                 client.DefaultRequestHeaders.Add("X-RapidAPI-Host", _judge0ApiHost);
 
-                // TODO: Step 4: Serialize the request and POST it to Judge0
-                // (Hint: Use JsonSerializer.Serialize() and StringContent)
+                // Serialize the request and POST it to Judge0
                 var jsonRequest = JsonSerializer.Serialize(createRequest);
+                //wrapping it in http object that holds our JSON by labelling it as "application/json", so Judge0 knows it's receiving json and not random text 
                 var httpContent = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
 
-
+                //sending our wrapped envelope to Judge0 server and awaiting the response
                 var httpResponse = await client.PostAsync($"{_judge0ApiUrl}/submissions?base64_encoded=false&wait=false", httpContent);
 
                 if (!httpResponse.IsSuccessStatusCode) {
@@ -67,27 +67,40 @@ namespace dotnetBitSmith.Services {
                     _logger.LogError("Judge0 failed to create submission. Status: {StatusCode}, Body: {ErrorBody}", httpResponse.StatusCode, errorContent);
                     throw new InvalidOperationException("Failed to create submission with Judge0.");
                 }
-                
+
+                //Judge0 server's resply in JSON
                 var responseContent = await httpResponse.Content.ReadAsStringAsync();
                 
+                //Converting it back to C# object
                 var createResponse = JsonSerializer.Deserialize<Judge0CreateSubmissionResponse>(responseContent);
                 if (createResponse == null || string.IsNullOrEmpty(createResponse.Token)) {
                     throw new InvalidOperationException("Judge0 returned an invalid token.");
                 }
+                //it's the token the server returned that has the number for our answer that it will give.
+                //we will use this token to ask for the submission result
                 var judgeToken = createResponse.Token;
 
                 _logger.LogInformation("Submission {SubmissionId} created on Judge0 with token {JudgeToken}", submission.Id, judgeToken);
 
                 Judge0GetSubmissionResponse? finalJudgeResponse = null;
-                while (true) {
-                    // Wait 250ms before checking the status
-                    await Task.Delay(250);
+                int pollAttempts = 0;
 
+                //trying to get the status like "Accepeted", "Wrong answer" for the earlier provided ticket number 
+                while (true) {
+                    pollAttempts++;
+                    if (pollAttempts > 20) { //Failsafe: 20 attempts * 500ms = 10 seconds
+                        throw new InvalidOperationException("Polling Judge0 timed out.");
+                    }
+                    // Wait 500ms before checking the status
+                    await Task.Delay(500);
+
+                    //,aking a new HTTP request for asking the status of our order i.e. the submission result
                     var getResponse = await client.GetAsync($"{_judge0ApiUrl}/submissions/{judgeToken}?base64_encoded=false");
                     if (!getResponse.IsSuccessStatusCode) {
                         throw new InvalidOperationException("Failed to poll for submission result from Judge0.");
                     }
 
+                    //getting the response and then deserializing it
                     var getResponseContent = await getResponse.Content.ReadAsStringAsync();
                     finalJudgeResponse = JsonSerializer.Deserialize<Judge0GetSubmissionResponse>(getResponseContent);
 
@@ -104,6 +117,7 @@ namespace dotnetBitSmith.Services {
                     // If status is 1 or 2, the loop will just continue
                 }
 
+                //updating our submission entity
                 MapJudge0StatusToSubmission(submission, finalJudgeResponse);
 
                 _context.Submissions.Update(submission);
@@ -156,8 +170,7 @@ namespace dotnetBitSmith.Services {
             // 7-12: Runtime Errors
             // 13: Internal Error
 
-            submission.Status = judgeResponse.Status.Id switch
-            {
+            submission.Status = judgeResponse.Status.Id switch {
                 3 => SubmissionStatus.Accepted,
                 4 => SubmissionStatus.WrongAnswer,
                 5 => SubmissionStatus.TimeLimitExceeded,
@@ -166,8 +179,7 @@ namespace dotnetBitSmith.Services {
             };
 
             // Parse time (e.g., "0.051s") to milliseconds
-            if (double.TryParse(judgeResponse.Time?.Replace("s", ""), out double timeInSeconds))
-            {
+            if (double.TryParse(judgeResponse.Time?.Replace("s", ""), out double timeInSeconds)) {
                 submission.ExecutionTimeMs = (int)(timeInSeconds * 1000);
             }
 

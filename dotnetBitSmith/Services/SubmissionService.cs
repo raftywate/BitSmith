@@ -10,10 +10,12 @@ namespace dotnetBitSmith.Services {
     public class SubmissionService : ISubmissionService {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<SubmissionService> _logger;
+        private readonly ICompilationService _compilationService;
 
-        public SubmissionService(ApplicationDbContext context, ILogger<SubmissionService> logger) {
+        public SubmissionService(ApplicationDbContext context, ILogger<SubmissionService> logger, ICompilationService compilationService) {
             _context = context;
             _logger = logger;
+            _compilationService = compilationService;
         }
 
         public async Task<SubmissionResultModel> CreateSubmissionAsync(SubmissionCreateModel model, Guid userId) {
@@ -39,6 +41,17 @@ namespace dotnetBitSmith.Services {
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Submission {SubmissionId} created successfully.", newSubmission.Id);
+            
+            try {
+                newSubmission = await _compilationService.JudgeSubmissionAsync(newSubmission);
+            } catch(Exception ex) {
+                _logger.LogError(ex, "Judge failed for Submission {SubmissionID}. Setting to InternalError.", newSubmission.Id);
+                // The Judge service already handles setting the error state,
+                // but we catch it here just in case the service itself blows up.
+                newSubmission.Status = SubmissionStatus.InternalError;
+            }
+
+            _logger.LogInformation("Submission {SubmissionId} judged with status: {Status}", newSubmission.Id, newSubmission.Status);
 
             return new SubmissionResultModel {
                 Id = newSubmission.Id,
