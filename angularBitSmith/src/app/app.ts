@@ -1,6 +1,7 @@
 import { Observable } from 'rxjs';
 import { Problem } from './services/problem';
 import { RouterOutlet } from '@angular/router';
+import { ThemeService } from './services/theme'; 
 import { HttpClient } from '@angular/common/http';
 import { CommonModule, NgClass } from "@angular/common";
 import { ProblemSummary } from './models/problem-summary';
@@ -24,6 +25,7 @@ export class App implements OnInit {
 
   protected readonly ProblemDifficulty = ProblemDifficulty;
   private problemService = inject(Problem);
+  themeService = inject(ThemeService);
 
   ngOnInit() {
     this.loadProblems();

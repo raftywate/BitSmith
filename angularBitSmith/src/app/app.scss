@@ -1,11 +1,23 @@
 /* We are using Tailwind CSS, which is loaded by the index.html.
-However, we still need a "host" style to set the
-global background color for our app.
+   This :host selector applies styles to our root <app-root> component.
 */
-
 :host {
   display: block;
-  background-color: #111827; /* Tailwind's bg-gray-900 */
-  color: #d1d5db; /* Tailwind's text-gray-300 */
   min-height: 100vh;
+
+  /* --- THIS IS THE FIX ---
+    1. DEFAULT (Light Mode): 
+       A white background and dark text.
+  */
+  background-color: #ffffff; /* white */
+  color: #111827; /* bg-gray-900 */
+  
+  /* 2. DARK MODE (using Tailwind's 'dark' class):
+       When the <html> tag has 'class="dark"',
+       this selector will activate.
+  */
+  :host-context(.dark) & {
+    background-color: #111827; /* bg-gray-900 */
+    color: #d1d5db; /* text-gray-300 */
+  }
 }

@@ -150,7 +150,7 @@ Focus so far: **Security**, **Performance**, **Clean Architecture**, **Scalabili
 - **BCrypt Password Hashing**
 - **Rate Limiting on login & submissions**
 - **EF Core migrations with complete schema**
-- **Efficient LINQ projections (`.Select()`)**
+- **Efficient LINQ projections**
 - **Transactional DB operations for Admin actions**
 
 ---
