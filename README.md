@@ -113,7 +113,6 @@ Focus so far: **Security**, **Performance**, **Clean Architecture**, **Scalabili
 - ✅ API Rate Limiting
 - ✅ EF Core Transactions for atomic operations
 - ✅ Fully layered architecture — Controllers / Services / Repos / DTOs
-- ✅ Secrets outside source control
 - ✅ Detailed exception handling middleware
 
 ---
