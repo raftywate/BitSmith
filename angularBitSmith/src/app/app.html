@@ -1,37 +1,55 @@
 <!-- 1. Main App Header -->
-<header class="bg-white dark:bg-bg-dark border-b border-border-light dark:border-border-dark shadow-sm font-sans transition-colors duration-300">
+<header
+  class="bg-white dark:bg-bg-dark border-b border-border-light dark:border-border-dark shadow-sm font-sans transition-colors duration-300">
   <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
     <!-- Logo uses Primary Brand Color -->
     <h1 class="text-3xl font-bold text-primary-light dark:text-primary-dark tracking-tight">
       <a href="/">BitSmith</a>
     </h1>
-    
+
     <div class="flex items-center space-x-4">
       <!-- Theme Toggles -->
       <!-- Background: Card Surface -->
-      <div class="flex items-center rounded-lg bg-card-light dark:bg-card-dark p-1 border border-border-light dark:border-border-dark">
-        <button 
-          (click)="themeService.setLightTheme()" 
+      <div
+        class="flex items-center rounded-lg bg-card-light dark:bg-card-dark p-1 border border-border-light dark:border-border-dark">
+        <button (click)="themeService.setLightTheme()"
           [ngClass]="{'bg-white text-primary-light shadow-sm': themeService.currentTheme() === 'light', 'text-text-secondary-light dark:text-text-secondary-dark hover:text-primary-light dark:hover:text-primary-dark': themeService.currentTheme() !== 'light'}"
           class="p-1.5 rounded-md transition-all duration-200">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line>  <line x1="12" y1="21" x2="12" y2="23"></line>  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
         </button>
-        <button 
-          (click)="themeService.setDarkTheme()" 
+        <button (click)="themeService.setDarkTheme()"
           [ngClass]="{'bg-bg-dark text-white shadow-sm': themeService.currentTheme() === 'dark', 'text-text-secondary-light dark:text-text-secondary-dark hover:text-primary-light dark:hover:text-primary-dark': themeService.currentTheme() !== 'dark'}"
           class="p-1.5 rounded-md transition-all duration-200">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" /></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+          </svg>
         </button>
-        <button 
-          (click)="themeService.setSystemTheme()" 
+        <button (click)="themeService.setSystemTheme()"
           [ngClass]="{'bg-white dark:bg-bg-dark text-primary-light dark:text-white shadow-sm': themeService.currentTheme() === 'system', 'text-text-secondary-light dark:text-text-secondary-dark hover:text-primary-light dark:hover:text-primary-dark': themeService.currentTheme() !== 'system'}"
           class="p-1.5 rounded-md transition-all duration-200">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm2-2a1 1 0 00-1 1v8a1 1 0 001 1h10a1 1 0 001-1V5a1 1 0 00-1-1H5z" clip-rule="evenodd" /><path d="M3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" /></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd"
+              d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm2-2a1 1 0 00-1 1v8a1 1 0 001 1h10a1 1 0 001-1V5a1 1 0 00-1-1H5z"
+              clip-rule="evenodd" />
+            <path d="M3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" />
+          </svg>
         </button>
       </div>
-      
+
       <!-- Login Button -->
-      <button class="bg-primary-light hover:bg-primary-hover-light dark:bg-primary-dark dark:hover:bg-primary-hover-dark text-white font-semibold py-2 px-5 rounded-lg transition duration-200 shadow-md hover:shadow-lg">
+      <button
+        class="bg-primary-light hover:bg-primary-hover-light dark:bg-primary-dark dark:hover:bg-primary-hover-dark text-white font-semibold py-2 px-5 rounded-lg transition duration-200 shadow-md hover:shadow-lg">
         Login
       </button>
     </div>
@@ -40,99 +58,130 @@
 
 <!-- 2. Main Content Area -->
 <main class="container mx-auto p-4 mt-8 font-sans max-w-6xl">
-  
+
   <!-- Problem List Card -->
-  <div class="bg-white dark:bg-card-dark border border-border-light dark:border-border-dark rounded-xl shadow-sm overflow-hidden transition-colors duration-300">
-    
+  <div
+    class="bg-white dark:bg-card-dark border border-border-light dark:border-border-dark rounded-xl shadow-sm overflow-hidden transition-colors duration-300">
+
     <div class="p-6 border-b border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark">
       <h2 class="text-2xl font-bold text-text-primary-light dark:text-text-primary-dark">Problem Set</h2>
-      <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-1">Browse and solve algorithmic challenges.</p>
+      <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-1">Browse and solve algorithmic
+        challenges.</p>
     </div>
-    
+
     <!-- Loading State -->
     @if (isLoading()) {
-      <div class="flex flex-col justify-center items-center h-64">
-        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-light dark:border-primary-dark mb-3"></div>
-        <div class="text-text-secondary-light dark:text-text-secondary-dark font-medium">Loading problems...</div>
+    <div class="flex flex-col justify-center items-center h-64">
+      <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-light dark:border-primary-dark mb-3">
       </div>
+      <div class="text-text-secondary-light dark:text-text-secondary-dark font-medium">Loading problems...</div>
+    </div>
     }
 
     <!-- Error State -->
     @if (error()) {
-      <div class="flex flex-col items-center justify-center h-64 p-6 text-center">
-        <div class="bg-red-50 dark:bg-red-900/20 p-4 rounded-full mb-3">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-error-light dark:text-error-dark" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-        </div>
-        <p class="text-text-primary-light dark:text-text-primary-dark font-bold text-lg">Unable to load problems</p>
-        <p class="text-text-secondary-light dark:text-text-secondary-dark mt-1">{{ error() }}</p>
-        <button (click)="loadProblems()" class="mt-4 text-primary-light dark:text-primary-dark hover:underline font-medium">Try Again</button>
+    <div class="flex flex-col items-center justify-center h-64 p-6 text-center">
+      <div class="bg-red-50 dark:bg-red-900/20 p-4 rounded-full mb-3">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-error-light dark:text-error-dark" fill="none"
+          viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
       </div>
+      <p class="text-text-primary-light dark:text-text-primary-dark font-bold text-lg">Unable to load problems</p>
+      <p class="text-text-secondary-light dark:text-text-secondary-dark mt-1">{{ error() }}</p>
+      <button (click)="loadProblems()"
+        class="mt-4 text-primary-light dark:text-primary-dark hover:underline font-medium">Try Again</button>
+    </div>
     }
 
     <!-- Success State (Table) -->
     @if (!isLoading() && problems().length > 0) {
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-border-light dark:divide-border-dark">
-          <thead class="bg-card-light dark:bg-bg-dark">
-            <tr>
-              <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-text-secondary-light dark:text-text-secondary-dark uppercase tracking-wider">Status</th>
-              <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-text-secondary-light dark:text-text-secondary-dark uppercase tracking-wider w-1/2">Title</th>
-              <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-text-secondary-light dark:text-text-secondary-dark uppercase tracking-wider">Difficulty</th>
-              <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-text-secondary-light dark:text-text-secondary-dark uppercase tracking-wider">Tags</th>
-            </tr>
-          </thead>
-          <tbody class="bg-white dark:bg-card-dark divide-y divide-border-light dark:divide-border-dark">
-            
-            @for (problem of problems(); track problem.id) {
-              <tr class="group hover:bg-card-light dark:hover:bg-bg-dark transition-colors duration-150 cursor-pointer">
-                
-                <!-- Status (Placeholder Icon) -->
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <div class="text-text-secondary-light dark:text-text-secondary-dark group-hover:text-primary-light dark:group-hover:text-primary-dark">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  </div>
-                </td>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-border-light dark:divide-border-dark">
+        <thead class="bg-card-light dark:bg-bg-dark">
+          <tr>
+            <th scope="col"
+              class="px-6 py-4 text-left text-xs font-bold text-text-secondary-light dark:text-text-secondary-dark uppercase tracking-wider">
+              S. No.</th>
+            <th scope="col"
+              class="px-6 py-4 text-left text-xs font-bold text-text-secondary-light dark:text-text-secondary-dark uppercase tracking-wider">
+              Status</th>
+            <th scope="col"
+              class="px-6 py-4 text-left text-xs font-bold text-text-secondary-light dark:text-text-secondary-dark uppercase tracking-wider w-1/2">
+              Title</th>
+            <th scope="col"
+              class="px-6 py-4 text-left text-xs font-bold text-text-secondary-light dark:text-text-secondary-dark uppercase tracking-wider">
+              Difficulty</th>
+            <th scope="col"
+              class="px-6 py-4 text-left text-xs font-bold text-text-secondary-light dark:text-text-secondary-dark uppercase tracking-wider">
+              Tags</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white dark:bg-card-dark divide-y divide-border-light dark:divide-border-dark">
 
-                <!-- Title -->
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <a href="#" class="text-text-primary-light dark:text-text-primary-dark group-hover:text-primary-light dark:group-hover:text-primary-dark font-medium transition-colors text-base">
-                    {{ problem.title }}
-                  </a>
-                </td>
-                
-                <!-- Difficulty Badge -->
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span 
-                    [ngClass]="{
+          @for (problem of problems(); track problem.id) {
+          <tr class="group hover:bg-card-light dark:hover:bg-bg-dark transition-colors duration-150 cursor-pointer">
+
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span class="text-text-secondary-light dark:text-text-secondary-dark font-medium">
+                {{ problem.problemNumber }}
+              </span>
+            </td>
+
+            <!-- Status (Placeholder Icon) -->
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div
+                class="text-text-secondary-light dark:text-text-secondary-dark group-hover:text-primary-light dark:group-hover:text-primary-dark">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                  stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </td>
+
+            <!-- Title -->
+            <td class="px-6 py-4 whitespace-nowrap">
+              <a href="#"
+                class="text-text-primary-light dark:text-text-primary-dark group-hover:text-primary-light dark:group-hover:text-primary-dark font-medium transition-colors text-base">
+                {{ problem.title }}
+              </a>
+            </td>
+
+            <!-- Difficulty Badge -->
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span [ngClass]="{
                       'text-success-light dark:text-success-dark bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-900': problem.difficulty === ProblemDifficulty.Easy,
                       'text-warning-light dark:text-warning-dark bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-900': problem.difficulty === ProblemDifficulty.Medium,
                       'text-error-light dark:text-error-dark bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-900': problem.difficulty === ProblemDifficulty.Hard
-                    }"
-                    class="px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full border">
-                    {{ problem.difficulty }}
-                  </span>
-                </td>
-                
-                <!-- Categories -->
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <div class="flex flex-wrap gap-2">
-                    @for (category of problem.categories; track category.id) {
-                      <span class="px-2.5 py-0.5 text-xs font-medium rounded-md bg-code-bg-light dark:bg-bg-dark text-text-secondary-light dark:text-text-secondary-dark border border-border-light dark:border-border-dark">
-                        {{ category.name }}
-                      </span>
-                    }
-                  </div>
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+                    }" class="px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full border">
+                {{ problem.difficulty }}
+              </span>
+            </td>
+
+            <!-- Categories -->
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="flex flex-wrap gap-2">
+                @for (category of problem.categories; track category.id) {
+                <span
+                  class="px-2.5 py-0.5 text-xs font-medium rounded-md bg-code-bg-light dark:bg-bg-dark text-text-secondary-light dark:text-text-secondary-dark border border-border-light dark:border-border-dark">
+                  {{ category.name }}
+                </span>
+                }
+              </div>
+            </td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
     }
   </div>
 </main>
 
 <!-- 3. Footer -->
-<footer class="text-center p-6 mt-10 text-text-secondary-light dark:text-text-secondary-dark text-sm font-sans border-t border-border-light dark:border-border-dark bg-white dark:bg-bg-dark">
+<footer
+  class="text-center p-6 mt-10 text-text-secondary-light dark:text-text-secondary-dark text-sm font-sans border-t border-border-light dark:border-border-dark bg-white dark:bg-bg-dark">
   <p>&copy; 2025 BitSmith. All rights reserved.</p>
 </footer>

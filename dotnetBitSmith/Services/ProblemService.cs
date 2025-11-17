@@ -28,6 +28,7 @@ namespace dotnetBitSmith.Services {
                 {
                     Id = p.Id,
                     Title = p.Title,
+                    ProblemNumber = p.ProblemNumber,
                     Difficulty = p.Difficulty,
                     Categories = p.ProblemCategories.Select(pc => new CategoryModel {
                         Id = pc.Category != null ? pc.Category.Id : Guid.Empty,

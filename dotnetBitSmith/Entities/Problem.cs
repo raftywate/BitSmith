@@ -4,6 +4,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace dotnetBitSmith.Entities {
     public class Problem {
+        // The [DatabaseGenerated] attribute tells SQL Server to handle the numbering (1, 2, 3...)
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public int ProblemNumber { get; set; }
+        
         [Key]
         public Guid Id { get; set; } = Guid.NewGuid();
 
