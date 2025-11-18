@@ -1,23 +1,10 @@
-/* We are using Tailwind CSS, which is loaded by the index.html.
-   This :host selector applies styles to our root <app-root> component.
+/* Apply global styles using our custom Tailwind colors.
+  We use the 'dark:' variant to automatically switch based on the <html> class.
 */
 :host {
   display: block;
   min-height: 100vh;
 
-  /* --- THIS IS THE FIX ---
-    1. DEFAULT (Light Mode): 
-       A white background and dark text.
-  */
-  background-color: #ffffff; /* white */
-  color: #111827; /* bg-gray-900 */
-  
-  /* 2. DARK MODE (using Tailwind's 'dark' class):
-       When the <html> tag has 'class="dark"',
-       this selector will activate.
-  */
-  :host-context(.dark) & {
-    background-color: #111827; /* bg-gray-900 */
-    color: #d1d5db; /* text-gray-300 */
-  }
+  @apply bg-bg-light text-text-primary-light;
+  @apply dark:bg-bg-dark dark:text-text-primary-dark;
 }
