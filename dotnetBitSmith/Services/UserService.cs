@@ -22,7 +22,7 @@ namespace dotnetBitSmith.Services {
                 FirstOrDefaultAsync(u => u.Id == userId);
 
             if(user == null) {
-                // This should be impossible if [Authorize] is working, but it's a critical safety check
+                // Impossible if [Authorize] is working
                 _logger.LogWarning("GetMyProfileAsync failed: User {UserId} not found.", userId);
                 throw new NotFoundException($"User with ID {userId} not found.");
             }
