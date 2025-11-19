@@ -25,7 +25,7 @@ namespace dotnetBitSmith.Controllers {
             return Ok(profile);
         }
 
-        [HttpPut("me")] 
+        [HttpPut("me")]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(UserProfileModel), StatusCodes.Status200OK)]
@@ -34,5 +34,14 @@ namespace dotnetBitSmith.Controllers {
             var updatedProfile = await _userService.UpdateMyProfileAsync(userId, model);
             return Ok(updatedProfile);
         }
-    }    
+
+        [HttpGet("{userId}")] // Route: GET /api/user/{userId}
+        [AllowAnonymous] // Overrides the [Authorize] on the class
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(UserProfileModel), StatusCodes.Status200OK)]
+        public async Task<ActionResult<UserProfileModel>> GetProfileById(Guid userId) {
+            var profile = await _userService.GetProfileByIdAsync(userId);
+            return Ok(profile);
+        }
+    }
 }

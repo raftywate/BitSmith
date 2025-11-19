@@ -37,6 +37,10 @@ namespace dotnetBitSmith.Services {
             };
         }
 
+        public async Task<UserProfileModel> GetProfileByIdAsync(Guid userId) {
+             return await GetMyProfileAsync(userId);
+        }
+
         public async Task<UserProfileModel> UpdateMyProfileAsync(Guid userId, UserProfileUpdateModel model) {
             _logger.LogInformation("Updating profile for User {UserId}", userId);
 
