@@ -99,7 +99,7 @@ Focus so far: **Security**, **Performance**, **Clean Architecture**, **Scalabili
 ### **Primary Tech Stack**
 
 - **Backend:** ASP.NET Core 8
-- **Database:** SQL Servera
+- **Database:** SQL Server
 - **ORM:** Entity Framework Core
 - **Authentication:** JWT + BCrypt
 - **Architecture:** Clean Architecture (SOLID + DRY)
