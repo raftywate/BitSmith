@@ -9,7 +9,7 @@ import { environment } from '../../environments/environment';
 @Injectable({
   providedIn: 'root',
 })
-export class Auth extends AuthServiceContract {
+export class AuthService extends AuthServiceContract {
 
 private http = inject(HttpClient);
 private apiUrl = `${environment.apiUrl}/auth`;

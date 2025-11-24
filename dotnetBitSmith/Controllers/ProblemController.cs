@@ -16,9 +16,10 @@ namespace dotnetBitSmith.Controllers {
         }
 
         [HttpGet]    
-        [ProducesResponseType(typeof(IEnumerable<ProblemSummaryModel>), StatusCodes.Status200OK)] //just for documentation in Swagger UI
-        public async Task<ActionResult<IEnumerable<ProblemSummaryModel>>> GetProblemsAsync() {
-            var problems = await _problemService.GetProblemsAsync();
+        [ProducesResponseType(typeof(ProblemSummaryListModel), StatusCodes.Status200OK)] //just for documentation in Swagger UI
+        // [FromQuery] tells .NET to look for ?PageNumber=1&PageSize=10 in the URL
+        public async Task<ActionResult<IEnumerable<ProblemSummaryModel>>> GetProblemsAsync([FromQuery] ProblemParametersModel parameters) {
+            var problems = await _problemService.GetProblemsAsync(parameters);
             return Ok(problems);
         }
 

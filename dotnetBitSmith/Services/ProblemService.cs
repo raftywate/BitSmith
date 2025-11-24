@@ -16,14 +16,23 @@ namespace dotnetBitSmith.Services {
             _logger = logger;
         }
 
-        public async Task<IEnumerable<ProblemSummaryModel>> GetProblemsAsync() {
-            _logger.LogInformation("Fetching all problem summaries.");
+        public async Task<ProblemSummaryListModel> GetProblemsAsync(ProblemParametersModel parameters) {
+            _logger.LogInformation("Fetching problems page {PageNumber} with size {PageSize}", parameters.PageNumber, parameters.PageSize);
+            
+            //1. Get the total count(for pagination)
+            var totalCount = await _context.Problems.CountAsync();
+            
             // This is a LINQ Projection Query.
             // We use .Select() to map *directly* from the Entity to the DTO.
             // This is extremely efficient. EF Core writes SQL to only
             // select the columns we need.
             var problems = await _context.Problems
                 .AsNoTracking()
+                .OrderBy(p => p.ProblemNumber)
+                .Skip((parameters.PageNumber - 1) * parameters.PageSize)
+                .Take(parameters.PageSize)
+                .Include(p => p.ProblemCategories)
+                    .ThenInclude(pc => pc.Category)
                 .Select(p => new ProblemSummaryModel
                 {
                     Id = p.Id,
@@ -37,7 +46,13 @@ namespace dotnetBitSmith.Services {
                     }).ToList()
                 })
                 .ToListAsync();
-            return problems;
+
+            return new ProblemSummaryListModel {
+                Problems = problems,
+                TotalCount = totalCount,
+                PageNumber = parameters.PageNumber,
+                PageSize = parameters.PageSize
+            };
         }
 
         public async Task<ProblemDetailModel> GetProblemByIdAsync(Guid problemId) {

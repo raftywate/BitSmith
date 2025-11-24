@@ -4,7 +4,7 @@ namespace dotnetBitSmith.Interfaces {
     public interface IProblemService {
         /// Gets a lightweight list of all problems for the summary page.
         /// A collection of ProblemSummaryModel.
-        Task<IEnumerable<ProblemSummaryModel>> GetProblemsAsync();
+        Task<ProblemSummaryListModel> GetProblemsAsync(ProblemParametersModel parameters);
         /// Gets the full details for a single problem by its ID.
         /// A ProblemDetailModel or null if not found.
         Task<ProblemDetailModel> GetProblemByIdAsync(Guid problemId);
