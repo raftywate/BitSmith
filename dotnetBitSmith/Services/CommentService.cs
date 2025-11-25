@@ -58,54 +58,77 @@ namespace dotnetBitSmith.Services {
             };
         }
 
-        public async Task<IEnumerable<CommentViewModel>> GetCommentsForSolutionAsync(Guid solutionId) {
-            _logger.LogInformation("Fetching comment tree for Solution {SolutionId}", solutionId);
+        public async Task<IEnumerable<CommentViewModel>> GetCommentsForSolutionAsync(Guid solutionId, CommentParametersModel parameters) {
+            _logger.LogInformation("Fetching comments for Solution {SolutionId}, Page {Page}, Size {Size}", solutionId, parameters.PageNumber, parameters.PageSize);
 
             // Fetch ALL comments for this solution in ONE query ---
             // Include User for the username, and Votes for the count.
 
+            if (!await _context.Solutions.AnyAsync(s => s.Id == solutionId)) {
+                throw new NotFoundException($"Solution with ID {solutionId} not found.");
+            }
+
+            // 1. Get the IDs of the ROOT comments for this page
+            var pagedRootIds = await _context.Comments
+                .AsNoTracking()
+                .Where(c => c.SolutionId == solutionId && c.ParentCommentId == null) // Only roots
+                .OrderByDescending(c => c.CreatedAt)
+                .Skip((parameters.PageNumber - 1) * parameters.PageSize)
+                .Take(parameters.PageSize)
+                .Select(c => c.Id)
+                .ToListAsync();
+
+
+            // 2. Fetch ALL comments (roots + replies) that are part of these threads
+            // Ideally, we'd use a recursive CTE here for infinite depth, but for V1, 
+            // fetching all comments for the solution and filtering in memory is efficient enough for moderate sizes.
             var allComments = await _context.Comments
-                .Include(c => c.User) //user names needed
+                .Include(c => c.User)
                 .Include(c => c.Votes)
-                .Where(c => c.SolutionId == solutionId)
+                .Where(c => c.SolutionId == solutionId) // Get everything for the solution
                 .OrderBy(c => c.CreatedAt)
                 .AsNoTracking()
                 .ToListAsync();
 
+            // 3. Build the Lookup
             var commentLookup = new Dictionary<Guid, CommentViewModel>();
-            var allCommentsViewModels = new List<CommentViewModel>();
+            var allCommentViewModels = new List<CommentViewModel>();
 
             foreach (var comment in allComments) {
                 var commentVM = new CommentViewModel {
                     Id = comment.Id,
-                    Content = comment.Content,
-                    CreatedAt = comment.CreatedAt,
                     SolutionId = comment.SolutionId,
                     ParentCommentId = comment.ParentCommentId,
-                    VoteCount = comment.Votes.Count(v => v.IsUpvote) - comment.Votes.Count(v => !v.IsUpvote),
-                    AuthorUsername = comment.User != null ? (comment.User.DisplayName ?? comment.User.Username) : "Unknown"
-                    // Replies list is still empty, which is correct for now
+                    Content = comment.Content,
+                    AuthorUsername = comment.User != null ? (comment.User.DisplayName ?? comment.User.Username) : "Unknown",
+                    CreatedAt = comment.CreatedAt,
+                    VoteCount = comment.Votes.Count(v => v.IsUpvote) - comment.Votes.Count(v => !v.IsUpvote)
                 };
-
-                allCommentsViewModels.Add(commentVM);
+                allCommentViewModels.Add(commentVM);
                 commentLookup.Add(commentVM.Id, commentVM);
             }
 
-            // Building the "Tree" (The "Final Report")`
-            // This is the list will be actually returned.
+            // 4. Build Tree & Filter
+            var pagedResults = new List<CommentViewModel>();
 
-            var nestedComments = new List<CommentViewModel>();
-            foreach(var commentVM in allCommentsViewModels) { 
-                if(commentVM.ParentCommentId == null) {
-                    nestedComments.Add(commentVM);
-                } else {
-                    if(commentLookup.TryGetValue(commentVM.ParentCommentId.Value, out var parentComment)) {
+            foreach (var commentVM in allCommentViewModels) {
+                if (commentVM.ParentCommentId == null) {
+                    // Only add this root if it was in our paged list of IDs
+                    if (pagedRootIds.Contains(commentVM.Id)) {
+                        pagedResults.Add(commentVM);
+                    }
+                }
+                else {
+                    // Always attach children to their parents
+                    if (commentLookup.TryGetValue(commentVM.ParentCommentId.Value, out var parentComment)) {
                         parentComment.Replies.Add(commentVM);
                     }
                 }
             }
 
-           return nestedComments;
+            // Re-sort the final list to ensure correct page order
+            return pagedResults.OrderByDescending(c => c.CreatedAt);
         }
+
     }
 }

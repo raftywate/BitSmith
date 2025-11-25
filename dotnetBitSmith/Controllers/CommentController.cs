@@ -32,9 +32,10 @@ namespace dotnetBitSmith.Controllers {
         [HttpGet("solution/{solutionId}")]
         [ProducesResponseType(typeof(IEnumerable<CommentViewModel>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<IEnumerable<CommentViewModel>>> GetCommentsForSolution(Guid solutionId) {
-            var results = await _commentService.GetCommentsForSolutionAsync(solutionId);
+        public async Task<ActionResult<IEnumerable<CommentViewModel>>> GetCommentsForSolution(Guid solutionId, [FromQuery] CommentParametersModel parameters) {
+            var results = await _commentService.GetCommentsForSolutionAsync(solutionId, parameters);
             return Ok(results);
         }
+
     }
 }
