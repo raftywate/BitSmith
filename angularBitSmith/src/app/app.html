@@ -10,18 +10,21 @@
       <div class="flex items-center rounded-lg bg-card-light dark:bg-card-dark p-1 border border-border-light dark:border-border-dark">
         <button 
           (click)="themeService.setLightTheme()" 
+          title = "Light Mode"
           [ngClass]="{'bg-white text-primary-light shadow-sm': themeService.currentTheme() === 'light', 'text-text-secondary-light dark:text-text-secondary-dark hover:text-primary-light dark:hover:text-primary-dark': themeService.currentTheme() !== 'light'}"
           class="p-1.5 rounded-md transition-all duration-200">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
         </button>
         <button 
           (click)="themeService.setDarkTheme()" 
+          title = "Dark Mode"
           [ngClass]="{'bg-bg-dark text-white shadow-sm': themeService.currentTheme() === 'dark', 'text-text-secondary-light dark:text-text-secondary-dark hover:text-primary-light dark:hover:text-primary-dark': themeService.currentTheme() !== 'dark'}"
           class="p-1.5 rounded-md transition-all duration-200">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" /></svg>
         </button>
         <button 
           (click)="themeService.setSystemTheme()" 
+          title="System theme"
           [ngClass]="{'bg-white dark:bg-bg-dark text-primary-light dark:text-white shadow-sm': themeService.currentTheme() === 'system', 'text-text-secondary-light dark:text-text-secondary-dark hover:text-primary-light dark:hover:text-primary-dark': themeService.currentTheme() !== 'system'}"
           class="p-1.5 rounded-md transition-all duration-200">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm2-2a1 1 0 00-1 1v8a1 1 0 001 1h10a1 1 0 001-1V5a1 1 0 00-1-1H5z" clip-rule="evenodd" /><path d="M3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" /></svg>
