@@ -1,11 +1,11 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, effect } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AuthServiceContract } from '../../services/auth.contract';
 import { Router, RouterModule } from '@angular/router';
-import { AuthService } from '../../services/auth';
 import { AuthResponse } from '../../models/auth-response';
 import { HttpErrorResponse } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
+import { ToastService } from '../../services/toast';
 
 @Component({
   selector: 'app-login',
@@ -18,6 +18,7 @@ export class Login {
   private fb = inject(FormBuilder);
   private authService = inject(AuthServiceContract);
   private router = inject(Router);
+  private toastService = inject(ToastService);
 
   //State Management with Signals
   isLoading = signal(false);
@@ -34,8 +35,8 @@ export class Login {
 
   constructor() {
     //if the user is already logged in, redirect them to the home page
-    this.authService.isLoggedIn$.subscribe(isLoggedIn => {
-      if(isLoggedIn) {
+    effect(() => {
+      if(this.authService.isLoggedIn$()) {
         this.router.navigate(['/problems']);
       }
     });
@@ -54,16 +55,20 @@ export class Login {
 
     this.authService.login({email, password}).subscribe({
       next : (response : AuthResponse) => {
+        this.toastService.success('Login successful!');
         this.router.navigate(['/problems']);
       },
       error : (err : HttpErrorResponse) => {
         this.isLoading.set(false);
         if(err.status == 401) {
           this.errorMessage.set('Invalid email or password. Please try again.');
+          this.toastService.error('Invalid credentials');
         } else if(err.status == 429) {
-          this.errorMessage.set('Too many login attemots. Please try again later.');
+          this.errorMessage.set('Too many login attempts. Please try again later.');
+          this.toastService.error('Too many attempts');
         } else {
           this.errorMessage.set('An unexpected error occurred during login.');
+          this.toastService.error('Login failed');
         }
         console.error('Login Error: ', err);
       },
