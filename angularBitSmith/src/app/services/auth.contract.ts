@@ -1,6 +1,6 @@
+import { Signal, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { User } from '../models/user';
-import { Injectable } from '@angular/core';
 import { AuthResponse } from '../models/auth-response';
 
 @Injectable({
@@ -8,12 +8,12 @@ import { AuthResponse } from '../models/auth-response';
 })
 export abstract class AuthServiceContract {
   //State Management
-  abstract readonly currentUser$ : Observable<User | null>;
-  abstract readonly isLoggedIn$ : Observable<boolean>;
-  abstract readonly isAdmin$ : Observable<boolean>;
+  abstract readonly currentUser$: Signal<User | null>;
+  abstract readonly isLoggedIn$: Signal<boolean>;
+  abstract readonly isAdmin$: Signal<boolean>;
 
   //API methods
-  abstract login(credentials : any) : Observable<AuthResponse>;
-  abstract register(credentials : any) : Observable<AuthResponse>;
-  abstract logout() : void;
+  abstract login(credentials: any): Observable<AuthResponse>;
+  abstract register(credentials: any): Observable<AuthResponse>;
+  abstract logout(): void;
 }
