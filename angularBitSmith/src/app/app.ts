@@ -10,7 +10,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, CommonModule, NgClass],
+  imports: [CommonModule, NgClass],
   templateUrl: './app.html',
   standalone : true,
   styleUrl: './app.scss'
