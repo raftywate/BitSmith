@@ -4,6 +4,7 @@ import { environment } from '../../environments/environment';
 import { Observable } from 'rxjs';
 import { ProblemSummary } from '../models/problem-summary';
 import { ProblemListResponse } from '../models/problem-list-response';
+import { ProblemDetail } from '../models/problem-detail';
 
 @Injectable({
   providedIn: 'root'
@@ -25,5 +26,9 @@ export class Problem {
       .set('PageSize', pageSize);
 
     return this.http.get<ProblemListResponse>(this.apiUrl, { params });
+  }
+
+  getProblemById(id : string): Observable<ProblemDetail> {
+    return this.http.get<ProblemDetail>(`${this.apiUrl}/${id}`);
   }
 }
