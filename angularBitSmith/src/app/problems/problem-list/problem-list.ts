@@ -1,8 +1,8 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, NgClass } from "@angular/common";
 import { FormsModule } from '@angular/forms';
-import { RouterModule } from '@angular/router';
-import { Problem } from '../../services/problem';
+import { Router, RouterModule } from '@angular/router';
+import { ProblemService } from '../../services/problem';
 import { ProblemSummary } from '../../models/problem-summary';
 import { ProblemDifficulty } from '../../models/problem-difficulty';
 import { ProblemListResponse } from '../../models/problem-list-response';
@@ -35,12 +35,18 @@ export class ProblemList implements OnInit {
     hasPrevPage = signal(false);
 
     //Services
-    private problemService = inject(Problem);
+    private problemService = inject(ProblemService);
     private toastService = inject(ToastService);
+    private router = inject(Router);
 
     ngOnInit() {
         this.loadProblems();
     }
+
+    open(id: string) {
+        this.router.navigate(['/problems', id]);
+    }
+
 
     loadProblems() {
         this.isLoading.set(true);

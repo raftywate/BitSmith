@@ -1,31 +1,23 @@
 import { Component, inject } from '@angular/core';
-import { CommonModule } from "@angular/common";
+import { AsyncPipe, NgIf } from '@angular/common';
 import { ActivatedRoute, RouterModule } from '@angular/router';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { switchMap, map } from 'rxjs/operators';
-import { Problem } from '../../services/problem';
-import { AuthService } from '../../services/auth';
-import { SkeletonComponent } from '../../components/skeleton/skeleton';
-import { of } from 'rxjs';
+import { ProblemService } from '../../services/problem';
+import { switchMap } from 'rxjs';
 
 @Component({
-    selector: 'app-problem-detail',
-    standalone: true,
-    imports: [CommonModule, RouterModule, SkeletonComponent],
-    templateUrl: './problem-detail.html',
-    styleUrl: './problem-detail.scss'
+  standalone: true,
+  selector: 'app-problem-detail',
+  templateUrl: './problem-detail.html',
+  imports: [
+    AsyncPipe,        
+    RouterModule
+  ]
 })
 export class ProblemDetail {
-    private route = inject(ActivatedRoute);
-    private problemService = inject(Problem);
-    private authService = inject(AuthService);
+  private route = inject(ActivatedRoute);
+  private problemService = inject(ProblemService);
 
-    public problem = toSignal(
-        this.route.paramMap.pipe(
-            map(params => params.get('id')),
-            switchMap(id => id ? this.problemService.getProblemById(id) : of(null))
-        )
-    );
-
-    public isLoggedIn = this.authService.isLoggedIn$;
+  problem$ = this.route.paramMap.pipe(
+    switchMap(params => this.problemService.getProblemById(params.get('id')!))
+  );
 }

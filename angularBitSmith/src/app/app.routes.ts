@@ -2,12 +2,18 @@ import { Routes } from '@angular/router';
 import { Login } from './auth/login/login';
 import { Register } from './auth/register/register';
 import { ProblemList } from './problems/problem-list/problem-list';
+import { ProblemDetail } from './problems/problem-detail/problem-detail';
 
 export const routes: Routes = [
   { path: '', redirectTo: '/problems', pathMatch: 'full' }, // Redirect root to problems
   {
     path: 'problems',
     component: ProblemList,
+    title: 'Problems - BitSmith'
+  },
+  {
+    path: 'problems/:id',
+    component: ProblemDetail,
     title: 'Problems - BitSmith'
   },
   {

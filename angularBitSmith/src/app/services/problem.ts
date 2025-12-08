@@ -9,7 +9,7 @@ import { ProblemDetail } from '../models/problem-detail';
 @Injectable({
   providedIn: 'root'
 })
-export class Problem {
+export class ProblemService {
   private http = inject(HttpClient);
 
   private apiUrl = `${environment.apiUrl}/problem`;
