@@ -70,6 +70,10 @@
   @apply px-2.5 py-0.5 text-xs font-medium rounded-md bg-code-bg-light dark:bg-bg-dark text-text-secondary-light dark:text-text-secondary-dark border border-border-light dark:border-border-dark;
 }
 
+.eyebrow {
+    margin-bottom: 0.75rem; /* 12px */
+}
+
 /* DIFFICULTY SYSTEM (USING DESIGN TOKENS PER YOUR CHOICE B) */
 .difficulty-chip {
   @apply px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full border;
@@ -86,6 +90,7 @@
 .difficulty-chip.hard {
   @apply text-error-light dark:text-error-dark bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-900;
 }
+
 .problem-list-page {
   display: grid;
   gap: 1.5rem;
