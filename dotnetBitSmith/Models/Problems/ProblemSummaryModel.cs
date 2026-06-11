@@ -7,5 +7,6 @@ namespace dotnetBitSmith.Models.Problems {
         public string Title { get; set; }
         public ProblemDifficulty Difficulty { get; set; }
         public List<CategoryModel> Categories { get; set; } = new();
+        public string? Status { get; set; }
     }
 }

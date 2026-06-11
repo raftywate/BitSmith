@@ -94,6 +94,10 @@ namespace dotnetBitSmith.Services {
                 })
             .ToListAsync();
 
+            foreach(var sub in submissions) {
+                sub.CreatedAt = DateTime.SpecifyKind(sub.CreatedAt, DateTimeKind.Utc);
+            }
+
             return submissions;
         }
 
@@ -109,11 +113,12 @@ namespace dotnetBitSmith.Services {
                 throw new NotFoundException("Problem with ID " + model.ProblemId + " not found.");
             }
 
-            var testCases = await _context.TestCases
+            var testCasesList = await _context.TestCases
                 .AsNoTracking()
                 .Where(testCase => testCase.ProblemId == model.ProblemId && !testCase.IsHidden)
-                .OrderBy(testCase => testCase.Id)
                 .ToListAsync();
+                
+            var testCases = testCasesList.OrderBy(testCase => testCase.Id).ToList();
 
             if (!testCases.Any()) {
                 return Enumerable.Empty<SampleRunResultModel>();

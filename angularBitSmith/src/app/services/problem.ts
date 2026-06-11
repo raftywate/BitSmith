@@ -18,7 +18,8 @@ export class ProblemService {
     page: number = 1,
     pageSize: number = 50,
     search?: string,
-    categoryIds?: string[]
+    categoryIds?: string[],
+    statusFilter?: string
   ): Observable<ProblemListResponse> {
     let params = new HttpParams()
       .set('PageNumber', String(page))
@@ -34,6 +35,10 @@ export class ProblemService {
       });
     }
 
+    if (statusFilter) {
+      params = params.set('StatusFilter', statusFilter);
+    }
+
     return this.http.get<ProblemListResponse>(this.apiUrl, { params });
   }
 
@@ -43,5 +48,27 @@ export class ProblemService {
 
   getCategories(): Observable<Category[]> {
     return this.http.get<Category[]>(`${this.apiUrl}/categories`);
+  }
+
+  getProblemOfTheDay(dateStr?: string): Observable<any> {
+    let params = new HttpParams();
+    if (dateStr) params = params.set('dateStr', dateStr);
+    params = params.set('_t', new Date().getTime().toString()); // Cache buster
+    return this.http.get<any>(`${this.apiUrl}/pod`, { params });
+  }
+
+  setProblemOfTheDay(dateStr: string, problemId: string): Observable<any> {
+    const params = new HttpParams()
+      .set('dateStr', dateStr)
+      .set('problemId', problemId);
+    return this.http.post<any>(`${this.apiUrl}/pod`, null, { params });
+  }
+
+  getPoDActivity(dateStr?: string, tzOffset?: number): Observable<{ solvedDates: string[], currentStreak: number }> {
+    let params = new HttpParams();
+    if (dateStr) params = params.set('dateStr', dateStr);
+    if (tzOffset !== undefined) params = params.set('tzOffset', tzOffset.toString());
+    params = params.set('_t', new Date().getTime().toString());
+    return this.http.get<{ solvedDates: string[], currentStreak: number }>(`${this.apiUrl}/pod/activity`, { params });
   }
 }

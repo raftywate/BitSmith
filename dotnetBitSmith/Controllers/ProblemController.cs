@@ -27,6 +27,10 @@ namespace dotnetBitSmith.Controllers {
         [ProducesResponseType(typeof(ProblemSummaryListModel), StatusCodes.Status200OK)] //just for documentation in Swagger UI
         // [FromQuery] tells .NET to look for ?PageNumber=1&PageSize=10 in the URL
         public async Task<ActionResult<IEnumerable<ProblemSummaryModel>>> GetProblemsAsync([FromQuery] ProblemParametersModel parameters) {
+            var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!string.IsNullOrEmpty(userIdString) && Guid.TryParse(userIdString, out var userId)) {
+                parameters.UserId = userId;
+            }
             var problems = await _problemService.GetProblemsAsync(parameters);
             return Ok(problems);
         }
@@ -35,7 +39,20 @@ namespace dotnetBitSmith.Controllers {
         [ProducesResponseType(typeof(IEnumerable<ProblemDetailModel>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<ProblemDetailModel>> GetProblemByIdAsync(Guid problemId) {
-            var problem = await _problemService.GetProblemByIdAsync(problemId);
+            Guid? userId = null;
+            var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!string.IsNullOrEmpty(userIdString) && Guid.TryParse(userIdString, out var parsedId)) {
+                userId = parsedId;
+            }
+            var problem = await _problemService.GetProblemByIdAsync(problemId, userId);
+            if (problem == null) return NotFound();
+
+            // Hide test cases from regular users
+            if (!User.IsInRole("Admin"))
+            {
+                problem.TestCases = null;
+            }
+
             return Ok(problem);
         }
 
@@ -93,6 +110,41 @@ namespace dotnetBitSmith.Controllers {
             return Ok(result);
         }
 
+        [HttpGet("pod")]
+        [ProducesResponseType(typeof(ProblemSummaryModel), StatusCodes.Status200OK)]
+        public async Task<ActionResult<ProblemSummaryModel>> GetProblemOfTheDay([FromQuery] string? dateStr) {
+            DateOnly date = DateOnly.FromDateTime(DateTime.UtcNow);
+            if (!string.IsNullOrEmpty(dateStr) && DateOnly.TryParse(dateStr, out var parsed)) {
+                date = parsed;
+            }
+            var pod = await _problemService.GetProblemOfTheDayAsync(date);
+            return Ok(pod);
+        }
+
+        [HttpPost("pod")]
+        [Authorize(Roles = "Admin")]
+        [ProducesResponseType(typeof(ProblemSummaryModel), StatusCodes.Status200OK)]
+        public async Task<ActionResult<ProblemSummaryModel>> SetProblemOfTheDay([FromQuery] string dateStr, [FromQuery] Guid problemId) {
+            if (!DateOnly.TryParse(dateStr, out var date)) return BadRequest("Invalid date format.");
+            var pod = await _problemService.SetProblemOfTheDayAsync(date, problemId);
+            return Ok(pod);
+        }
+
+        [HttpGet("pod/activity")]
+        [Authorize]
+        [ProducesResponseType(typeof(PoDActivityModel), StatusCodes.Status200OK)]
+        public async Task<ActionResult<PoDActivityModel>> GetPoDActivity([FromQuery] string? dateStr, [FromQuery] int? tzOffset) {
+            var userId = User.GetUserId();
+            DateOnly todayLocal = DateOnly.FromDateTime(DateTime.UtcNow);
+            if (!string.IsNullOrEmpty(dateStr) && DateOnly.TryParse(dateStr, out var parsed)) {
+                todayLocal = parsed;
+            }
+            int offset = tzOffset ?? 0;
+
+            var activity = await _problemService.GetPoDActivityAsync(userId, offset, todayLocal);
+            return Ok(activity);
+        }
+
         /// <summary>
         /// Upload test cases from a CSV or JSON file.
         /// CSV format (header required): isHidden,input,expectedOutput,inputLabels
@@ -142,8 +194,15 @@ namespace dotnetBitSmith.Controllers {
                         if (parts.Length < 3)
                             return BadRequest($"Malformed CSV row: {line.Substring(0, Math.Min(50, line.Length))}");
 
+                        bool isHidden = false;
+                        if (parts.Length > 0)
+                        {
+                            var rawHidden = parts[0].Trim().ToLower();
+                            isHidden = rawHidden == "true" || rawHidden == "1";
+                        }
+
                         testCases.Add(new TestCaseCreateModel {
-                            IsHidden = bool.TryParse(parts[0].Trim(), out var h) && h,
+                            IsHidden = isHidden,
                             Input = parts[1].Trim().Replace("\\n", "\n"),
                             ExpectedOutput = parts[2].Trim().Replace("\\n", "\n"),
                             InputLabels = parts.Length > 3

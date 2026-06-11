@@ -14,6 +14,8 @@ import { MarkdownRenderPipe } from '../../pipes/markdown-render.pipe';
 import { ProblemSummary } from '../../models/problem-summary';
 import { ProblemDetail, SampleTestCase } from '../../models/problem-detail';
 
+export type AdminStep = 'problem' | 'testcases' | 'review' | 'done';
+
 @Component({
   selector: 'app-admin-panel',
   standalone: true,
@@ -56,6 +58,7 @@ export class AdminPanelComponent implements OnInit {
 
   categories = signal<Category[]>([]);
   existingProblems = signal<ProblemSummary[]>([]);
+  isEditRoute = signal(false);
   isSubmitting = signal(false);
   isLoadingExistingProblems = signal(false);
   isLoadingEditProblem = signal(false);
@@ -64,7 +67,7 @@ export class AdminPanelComponent implements OnInit {
   problemSearch = signal('');
   isAddingTestCases = signal(false);
   isUploadingFile = signal(false);
-  activeStep = signal<'problem' | 'testcases' | 'done'>('problem');
+  activeStep = signal<AdminStep>('problem');
 
   difficulties = ['Easy', 'Medium', 'Hard'];
   selectedCategories = signal<string[]>([]);
@@ -90,6 +93,7 @@ export class AdminPanelComponent implements OnInit {
     title: ['', [Validators.required, Validators.minLength(5), Validators.maxLength(100)]],
     description: ['', [Validators.required, Validators.minLength(10)]],
     difficulty: ['Easy', Validators.required],
+    metaDataJson: [''],
     hasHints: [false],
     hints: this.fb.array([]),
     starterCode: this.fb.group({
@@ -143,12 +147,15 @@ export class AdminPanelComponent implements OnInit {
   }
 
   ngOnInit() {
+    this.isEditRoute.set(this.router.url.includes('/edit'));
     this.problemService.getCategories().subscribe({
       next: cats => this.categories.set(cats),
       error: err => console.error('Failed to load categories:', err)
     });
 
-    this.searchExistingProblems();
+    if (this.isEditRoute()) {
+      this.searchExistingProblems();
+    }
 
     const problemId = this.route.snapshot.queryParamMap.get('problemId');
     if (problemId) {
@@ -350,6 +357,7 @@ export class AdminPanelComponent implements OnInit {
       description: val.description,
       difficulty: val.difficulty,
       starterCode: starterCodeJson,
+      metaDataJson: val.metaDataJson?.trim() || null,
       hints: this.getCleanHints(),
       categoryIDs: this.selectedCategories()
     };
@@ -361,7 +369,8 @@ export class AdminPanelComponent implements OnInit {
     request.subscribe({
       next: (problem) => {
         this.createdProblemId.set(problem.id);
-        this.editingProblemId.set(this.isEditMode ? problem.id : null);
+        // By setting editingProblemId, going "Previous" from Step 2 will treat it as an edit 
+        this.editingProblemId.set(problem.id);
         this.isSubmitting.set(false);
         this.toastService.success(`Problem "${problem.title}" ${this.isEditMode ? 'updated' : 'created'}!`);
         this.activeStep.set('testcases');
@@ -371,6 +380,25 @@ export class AdminPanelComponent implements OnInit {
         this.toastService.error(getApiErrorMessage(err, 'Failed to create problem.'));
       }
     });
+  }
+
+  goToReview() {
+    if (this.uploadMode() === 'manual') {
+      const hasManualCases = this.testCasesArray.length > 0;
+      if (hasManualCases && this.testCasesForm.invalid) {
+        this.testCasesForm.markAllAsTouched();
+        return;
+      }
+    }
+    this.activeStep.set('review');
+  }
+
+  goBackToProblem() {
+    this.activeStep.set('problem');
+  }
+
+  goBackToTestCases() {
+    this.activeStep.set('testcases');
   }
 
   onSubmitTestCases() {
@@ -459,6 +487,7 @@ export class AdminPanelComponent implements OnInit {
       description: problem.description,
       difficulty: problem.difficulty,
       starterCode,
+      metaDataJson: problem.metaDataJson || '',
       hasHints
     });
 

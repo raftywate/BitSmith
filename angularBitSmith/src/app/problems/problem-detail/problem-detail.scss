@@ -359,7 +359,8 @@
 }
 
 .tab-panel--copy {
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   align-content: start;
 }
 
@@ -382,18 +383,29 @@
   font-size: 0.95rem;
   line-height: 1.7;
   color: var(--text-body);
+  word-wrap: break-word !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  min-width: 0;
+  max-width: 100%;
 }
 
-.workspace-copy p {
+::ng-deep .workspace-copy * {
+  word-wrap: break-word !important;
+  overflow-wrap: anywhere !important;
+  max-width: 100%;
+}
+
+::ng-deep .workspace-copy p {
   margin-top: 0;
   margin-bottom: 0.9rem;
 }
 
-.workspace-copy p:last-child {
+::ng-deep .workspace-copy p:last-child {
   margin-bottom: 0;
 }
 
-.workspace-copy code {
+::ng-deep .workspace-copy code {
   font-family: 'IBM Plex Mono', 'Cascadia Code', Consolas, Monaco, monospace;
   font-size: 0.85em;
   background-color: var(--surface-3);
@@ -401,9 +413,12 @@
   padding: 0.15rem 0.35rem;
   border-radius: 0.38rem;
   border: 1px solid var(--border-color);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
-.workspace-copy pre {
+::ng-deep .workspace-copy pre {
   font-family: 'IBM Plex Mono', 'Cascadia Code', Consolas, Monaco, monospace;
   font-size: 0.88rem;
   background-color: var(--surface-2);
@@ -412,44 +427,46 @@
   border-radius: 0.75rem;
   border: 1px solid var(--border-color);
   margin: 1rem 0;
-  overflow-x: auto;
   line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
-.workspace-copy ul, 
-.workspace-copy ol {
+::ng-deep .workspace-copy ul, 
+::ng-deep .workspace-copy ol {
   margin-top: 0;
   margin-bottom: 0.9rem;
   padding-left: 1.5rem;
 }
 
-.workspace-copy li {
+::ng-deep .workspace-copy li {
   margin-bottom: 0.4rem;
 }
 
-.workspace-copy sup,
-.workspace-copy sub {
+::ng-deep .workspace-copy sup,
+::ng-deep .workspace-copy sub {
   font-size: 75%;
   line-height: 0;
   position: relative;
   vertical-align: baseline;
 }
 
-.workspace-copy sup {
+::ng-deep .workspace-copy sup {
   top: -0.5em;
 }
 
-.workspace-copy sub {
+::ng-deep .workspace-copy sub {
   bottom: -0.2em;
 }
 
-.workspace-copy strong {
+::ng-deep .workspace-copy strong {
   color: var(--text-strong);
   font-weight: 600;
 }
 
 /* Example Block Styling */
-.workspace-copy .example-block {
+::ng-deep .workspace-copy .example-block {
   background-color: var(--surface-2);
   border-left: 4px solid var(--accent);
   padding: 0.9rem 1.1rem;
@@ -457,18 +474,20 @@
   border-radius: 0.5rem;
 }
 
-.workspace-copy .example-block p {
+::ng-deep .workspace-copy .example-block p {
   margin-bottom: 0.45rem;
 }
 
-.workspace-copy .example-block p:last-child {
+::ng-deep .workspace-copy .example-block p:last-child {
   margin-bottom: 0;
 }
 
-.workspace-copy .example-io {
+::ng-deep .workspace-copy .example-io {
   font-family: 'IBM Plex Mono', 'Cascadia Code', Consolas, Monaco, monospace;
   color: var(--text-strong);
   font-weight: 500;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
 }
 
 .workspace-copy--solution {

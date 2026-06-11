@@ -8,6 +8,7 @@ import { UserService } from '../services/user';
 import { ToastService } from '../services/toast';
 import { getApiErrorMessage } from '../utils/api-error';
 import { AuthService } from '../services/auth';
+import { ProblemService } from '../services/problem';
 
 @Component({
   selector: 'app-profile',
@@ -21,7 +22,12 @@ export class ProfileComponent {
   private readonly fb = inject(FormBuilder);
   private readonly destroyRef = inject(DestroyRef);
   private readonly authService = inject(AuthService);
+  private readonly problemService = inject(ProblemService);
 
+  totalProblems = signal<number>(0);
+  totalEasy = signal<number>(0);
+  totalMedium = signal<number>(0);
+  totalHard = signal<number>(0);
   profile = signal<UserProfile | null>(null);
   isLoading = signal(true);
   isSaving = signal(false);
@@ -43,7 +49,69 @@ export class ProfileComponent {
 
   heatmapDays = computed(() => this.buildHeatmapDays());
 
+  // Ring Chart Logic
+  ringRadius = 45;
+  ringCircumference = 2 * Math.PI * this.ringRadius;
+  ringArcLength = this.ringCircumference * 0.75; // 270 degrees
+  ringGap = 4; // 4px gap between the 3 sections
+
+  easyTrack = computed(() => {
+    const total = this.totalProblems();
+    if (!total) return { dash: `0 ${this.ringCircumference}`, offset: 0, length: 0 };
+    const len = (this.totalEasy() / total) * (this.ringArcLength - 2 * this.ringGap);
+    return { dash: `${len} ${this.ringCircumference}`, offset: 0, length: len };
+  });
+
+  mediumTrack = computed(() => {
+    const total = this.totalProblems();
+    if (!total) return { dash: `0 ${this.ringCircumference}`, offset: 0, length: 0 };
+    const len = (this.totalMedium() / total) * (this.ringArcLength - 2 * this.ringGap);
+    const offset = -(this.easyTrack().length + this.ringGap);
+    return { dash: `${len} ${this.ringCircumference}`, offset, length: len };
+  });
+
+  hardTrack = computed(() => {
+    const total = this.totalProblems();
+    if (!total) return { dash: `0 ${this.ringCircumference}`, offset: 0, length: 0 };
+    const len = (this.totalHard() / total) * (this.ringArcLength - 2 * this.ringGap);
+    const offset = -(this.easyTrack().length + this.mediumTrack().length + 2 * this.ringGap);
+    return { dash: `${len} ${this.ringCircumference}`, offset, length: len };
+  });
+
+  easyArc = computed(() => {
+    const stats = this.profile()?.stats;
+    const total = this.totalProblems();
+    if (!stats || !total) return { dash: `0 ${this.ringCircumference}`, offset: 0, length: 0 };
+    const len = (stats.easySolved / total) * (this.ringArcLength - 2 * this.ringGap);
+    return { dash: `${len} ${this.ringCircumference}`, offset: this.easyTrack().offset, length: len };
+  });
+
+  mediumArc = computed(() => {
+    const stats = this.profile()?.stats;
+    const total = this.totalProblems();
+    if (!stats || !total) return { dash: `0 ${this.ringCircumference}`, offset: 0, length: 0 };
+    const len = (stats.mediumSolved / total) * (this.ringArcLength - 2 * this.ringGap);
+    return { dash: `${len} ${this.ringCircumference}`, offset: this.mediumTrack().offset, length: len };
+  });
+
+  hardArc = computed(() => {
+    const stats = this.profile()?.stats;
+    const total = this.totalProblems();
+    if (!stats || !total) return { dash: `0 ${this.ringCircumference}`, offset: 0 };
+    const len = (stats.hardSolved / total) * (this.ringArcLength - 2 * this.ringGap);
+    return { dash: `${len} ${this.ringCircumference}`, offset: this.hardTrack().offset };
+  });
+
   constructor() {
+    this.problemService.getProblems(1, 1).subscribe({
+      next: res => {
+        this.totalProblems.set(res.totalCount);
+        this.totalEasy.set(res.totalEasy);
+        this.totalMedium.set(res.totalMedium);
+        this.totalHard.set(res.totalHard);
+      }
+    });
+
     this.userService
       .getMyProfile()
       .pipe(takeUntilDestroyed(this.destroyRef))

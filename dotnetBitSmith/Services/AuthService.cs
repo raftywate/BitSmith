@@ -96,7 +96,7 @@ namespace dotnetBitSmith.Services {
             // 3. Define the token
             var tokenDescriptor = new SecurityTokenDescriptor {
                 Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddHours(1), // Token is valid for 1 hour
+                Expires = DateTime.UtcNow.AddDays(7), // Token is valid for 7 days
                 Issuer = issuer,
                 Audience = audience,
                 SigningCredentials = creds

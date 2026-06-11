@@ -50,6 +50,8 @@ namespace dotnetBitSmith.Services {
                 var metadata = await GetProblemMetadataAsync(problem.Title);
                 if (metadata != null) {
                     wrappedCode = WrapCode(submission.Language, submission.Code, metadata.Value.MethodName, metadata.Value.ParamTypes, metadata.Value.ReturnType);
+                } else {
+                    wrappedCode = InjectLibraries(submission.Language, submission.Code);
                 }
 
                 var combinedInput = string.Join("\n", testCases.Select(tc => tc.Input.TrimEnd('\r', '\n')));
@@ -135,7 +137,11 @@ namespace dotnetBitSmith.Services {
                     var metadata = await GetProblemMetadataAsync(problemTitle);
                     if (metadata != null) {
                         wrappedCode = WrapCode(language, code, metadata.Value.MethodName, metadata.Value.ParamTypes, metadata.Value.ReturnType);
+                    } else {
+                        wrappedCode = InjectLibraries(language, code);
                     }
+                } else {
+                    wrappedCode = InjectLibraries(language, code);
                 }
             } catch (Exception ex) {
                 _logger.LogWarning(ex, "Failed to wrap code for sample run.");
@@ -161,7 +167,8 @@ namespace dotnetBitSmith.Services {
         }
 
         public async Task<RunCodeResultModel> ExecuteCustomCodeAsync(string language, string code, string stdin) {
-            var result = await ExecuteInSandboxAsync(language, code, stdin);
+            var wrappedCode = InjectLibraries(language, code);
+            var result = await ExecuteInSandboxAsync(language, wrappedCode, stdin);
             return new RunCodeResultModel {
                 Stdout = result.Stdout ?? string.Empty,
                 Stderr = result.Error ?? string.Empty,
@@ -368,8 +375,40 @@ namespace dotnetBitSmith.Services {
             } catch { }
         }
 
+        private static readonly SemaphoreSlim _metadataSemaphore = new SemaphoreSlim(1, 1);
+
         private async Task<(string MethodName, List<string> ParamTypes, string ReturnType)?> GetProblemMetadataAsync(string problemTitle) {
+            await _metadataSemaphore.WaitAsync();
             try {
+                // First check database for custom metadata
+                var problem = await _context.Problems.AsNoTracking().FirstOrDefaultAsync(p => p.Title == problemTitle);
+                if (problem != null && !string.IsNullOrWhiteSpace(problem.MetaDataJson)) {
+                    using (var doc = JsonDocument.Parse(problem.MetaDataJson)) {
+                        var metaData = doc.RootElement;
+                        var name = metaData.TryGetProperty("name", out var nProp) ? nProp.GetString() ?? "solve" : "solve";
+                        var returnType = "integer";
+                        if (metaData.TryGetProperty("return", out var retProp)) {
+                            if (retProp.ValueKind == JsonValueKind.String) {
+                                returnType = retProp.GetString() ?? "integer";
+                            } else if (retProp.ValueKind == JsonValueKind.Object && retProp.TryGetProperty("type", out var typeProp)) {
+                                returnType = typeProp.GetString() ?? "integer";
+                            }
+                        }
+                        var paramTypes = new List<string>();
+                        if (metaData.TryGetProperty("params", out var paramsProp) && paramsProp.ValueKind == JsonValueKind.Array) {
+                            foreach (var param in paramsProp.EnumerateArray()) {
+                                if (param.TryGetProperty("type", out var pType)) {
+                                    paramTypes.Add(pType.GetString() ?? "integer");
+                                } else {
+                                    paramTypes.Add("integer");
+                                }
+                            }
+                        }
+                        return (name, paramTypes, returnType);
+                    }
+                }
+
+                // Fallback to problems.json
                 var jsonPath = Path.Combine(Directory.GetCurrentDirectory(), "problems.json");
                 if (!File.Exists(jsonPath)) return null;
 
@@ -380,12 +419,23 @@ namespace dotnetBitSmith.Services {
                         var title = p.GetProperty("title").GetString();
                         if (string.Equals(title, problemTitle, StringComparison.OrdinalIgnoreCase)) {
                             var metaData = p.GetProperty("metaData");
-                            var name = metaData.GetProperty("name").GetString() ?? "solve";
-                            var returnType = metaData.GetProperty("return").GetProperty("type").GetString() ?? "integer";
+                            var name = metaData.TryGetProperty("name", out var nProp) ? nProp.GetString() ?? "solve" : "solve";
+                            var returnType = "integer";
+                            if (metaData.TryGetProperty("return", out var retProp)) {
+                                if (retProp.ValueKind == JsonValueKind.String) {
+                                    returnType = retProp.GetString() ?? "integer";
+                                } else if (retProp.ValueKind == JsonValueKind.Object && retProp.TryGetProperty("type", out var typeProp)) {
+                                    returnType = typeProp.GetString() ?? "integer";
+                                }
+                            }
                             var paramTypes = new List<string>();
                             if (metaData.TryGetProperty("params", out var paramsProp) && paramsProp.ValueKind == JsonValueKind.Array) {
                                 foreach (var param in paramsProp.EnumerateArray()) {
-                                    paramTypes.Add(param.GetProperty("type").GetString() ?? "integer");
+                                    if (param.TryGetProperty("type", out var pType)) {
+                                        paramTypes.Add(pType.GetString() ?? "integer");
+                                    } else {
+                                        paramTypes.Add("integer");
+                                    }
                                 }
                             }
                             return (name, paramTypes, returnType);
@@ -394,6 +444,8 @@ namespace dotnetBitSmith.Services {
                 }
             } catch (Exception ex) {
                 _logger.LogError(ex, "Failed to read problem metadata for title {Title}", problemTitle);
+            } finally {
+                _metadataSemaphore.Release();
             }
             return null;
         }
@@ -415,20 +467,65 @@ namespace dotnetBitSmith.Services {
             }
         }
 
+        private static string InjectLibraries(string language, string userCode) {
+            switch (NormalizeLanguage(language)) {
+                case "cpp":
+                    return "#include <bits/stdc++.h>\nusing namespace std;\n\nstruct ListNode {\n    int val;\n    ListNode *next;\n    ListNode() : val(0), next(nullptr) {}\n    ListNode(int x) : val(x), next(nullptr) {}\n    ListNode(int x, ListNode *next) : val(x), next(next) {}\n};\n\nstruct TreeNode {\n    int val;\n    TreeNode *left;\n    TreeNode *right;\n    TreeNode() : val(0), left(nullptr), right(nullptr) {}\n    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}\n    TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}\n};\n\n" + userCode;
+                case "c":
+                    return "#define _GNU_SOURCE\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdbool.h>\n#include <math.h>\n#include <limits.h>\n#include <ctype.h>\n\nstruct ListNode {\n    int val;\n    struct ListNode *next;\n};\n\nstruct TreeNode {\n    int val;\n    struct TreeNode *left;\n    struct TreeNode *right;\n};\n\n" + userCode;
+                case "java":
+                    return "import java.util.*;\nimport java.io.*;\nimport java.math.*;\nimport java.text.*;\n\nclass ListNode {\n    int val;\n    ListNode next;\n    ListNode() {}\n    ListNode(int val) { this.val = val; }\n    ListNode(int val, ListNode next) { this.val = val; this.next = next; }\n}\n\nclass TreeNode {\n    int val;\n    TreeNode left;\n    TreeNode right;\n    TreeNode() {}\n    TreeNode(int val) { this.val = val; }\n    TreeNode(int val, TreeNode left, TreeNode right) {\n        this.val = val;\n        this.left = left;\n        this.right = right;\n    }\n}\n\n" + userCode;
+                case "csharp":
+                    return "using System;\nusing System.Collections;\nusing System.Collections.Generic;\nusing System.Linq;\nusing System.Text;\nusing System.Text.RegularExpressions;\nusing System.Threading.Tasks;\nusing System.Numerics;\n\npublic class ListNode {\n    public int val;\n    public ListNode next;\n    public ListNode(int val=0, ListNode next=null) {\n        this.val = val;\n        this.next = next;\n    }\n}\n\npublic class TreeNode {\n    public int val;\n    public TreeNode left;\n    public TreeNode right;\n    public TreeNode(int val=0, TreeNode left=null, TreeNode right=null) {\n        this.val = val;\n        this.left = left;\n        this.right = right;\n    }\n}\n\n" + userCode;
+                case "python":
+                    return "import sys\nimport os\nimport math\nimport collections\nimport itertools\nimport functools\nimport bisect\nimport heapq\nimport re\nimport string\nimport operator\nimport copy\nfrom typing import *\n\nclass ListNode:\n    def __init__(self, val=0, next=None):\n        self.val = val\n        self.next = next\n\nclass TreeNode:\n    def __init__(self, val=0, left=None, right=None):\n        self.val = val\n        self.left = left\n        self.right = right\n\n" + userCode;
+                default:
+                    return userCode;
+            }
+        }
+
+        private static string GetCppType(string jsonType) {
+            if (jsonType.EndsWith("[]")) return "vector<" + GetCppType(jsonType.Substring(0, jsonType.Length - 2)) + ">";
+            switch(jsonType) {
+                case "integer": return "int";
+                case "long": return "long long";
+                case "double": return "double";
+                case "float": return "float";
+                case "boolean": return "bool";
+                case "character": return "char";
+                case "string": return "string";
+                case "ListNode": return "ListNode*";
+                case "TreeNode": return "TreeNode*";
+                default: return "int";
+            }
+        }
+
+        private static string GetCppParser(string jsonType, string varLine) {
+            if (jsonType == "ListNode") return $"BitSmithRunner::parse_list_node({varLine})";
+            if (jsonType == "TreeNode") return $"BitSmithRunner::parse_tree_node({varLine})";
+            if (jsonType == "integer") return $"BitSmithRunner::parse_int({varLine})";
+            if (jsonType == "long") return $"BitSmithRunner::parse_long({varLine})";
+            if (jsonType == "double") return $"BitSmithRunner::parse_double({varLine})";
+            if (jsonType == "float") return $"BitSmithRunner::parse_double({varLine})"; // C++ uses double for stof/stod usually, let's cast or rely on implicit conv
+            if (jsonType == "boolean") return $"BitSmithRunner::parse_bool({varLine})";
+            if (jsonType == "character") return $"BitSmithRunner::parse_char({varLine})";
+            if (jsonType == "string") return $"BitSmithRunner::parse_string({varLine})";
+            
+            if (jsonType.EndsWith("[][]")) {
+                string baseType = jsonType.Substring(0, jsonType.Length - 4);
+                string parserFn = GetCppParser(baseType, "").Replace("(", "").Replace(")", "");
+                return $"BitSmithRunner::parse_matrix<{GetCppType(baseType)}>({varLine}, {parserFn})";
+            } else if (jsonType.EndsWith("[]")) {
+                string baseType = jsonType.Substring(0, jsonType.Length - 2);
+                string parserFn = GetCppParser(baseType, "").Replace("(", "").Replace(")", "");
+                return $"BitSmithRunner::parse_vector<{GetCppType(baseType)}>({varLine}, {parserFn})";
+            }
+            return $"/* Unsupported {jsonType} */ 0";
+        }
+
         private static string WrapCpp(string userCode, string methodName, List<string> paramTypes, string returnType) {
             var sb = new StringBuilder();
-            sb.AppendLine("#include <iostream>");
-            sb.AppendLine("#include <vector>");
-            sb.AppendLine("#include <string>");
-            sb.AppendLine("#include <unordered_map>");
-            sb.AppendLine("#include <map>");
-            sb.AppendLine("#include <set>");
-            sb.AppendLine("#include <unordered_set>");
-            sb.AppendLine("#include <algorithm>");
-            sb.AppendLine("#include <numeric>");
-            sb.AppendLine("#include <queue>");
-            sb.AppendLine("#include <stack>");
-            sb.AppendLine("#include <sstream>");
+            sb.AppendLine("#include <bits/stdc++.h>");
             sb.AppendLine();
             sb.AppendLine("using namespace std;");
             sb.AppendLine();
@@ -470,32 +567,47 @@ namespace dotnetBitSmith.Services {
             sb.AppendLine("        string val = parse_string(s);");
             sb.AppendLine("        return val.empty() ? ' ' : val[0];");
             sb.AppendLine("    }");
-            sb.AppendLine("    vector<int> parse_vector_int(const string& raw_s) {");
-            sb.AppendLine("        string s = trim(raw_s);");
-            sb.AppendLine("        vector<int> res;");
-            sb.AppendLine("        if (s.length() < 2 || s.front() != '[' || s.back() != ']') return res;");
-            sb.AppendLine("        string content = s.substr(1, s.length() - 2);");
-            sb.AppendLine("        if (content.empty()) return res;");
-            sb.AppendLine("        stringstream ss(content);");
-            sb.AppendLine("        string token;");
-            sb.AppendLine("        while (getline(ss, token, ',')) {");
-            sb.AppendLine("            res.push_back(stoi(trim(token)));");
+            sb.AppendLine("    vector<string> splitJsonArray(const string& s_raw) {");
+            sb.AppendLine("        string t = trim(s_raw);");
+            sb.AppendLine("        if (t.length() < 2) return {};");
+            sb.AppendLine("        t = trim(t.substr(1, t.length() - 2));");
+            sb.AppendLine("        if (t.empty()) return {};");
+            sb.AppendLine("        vector<string> list;");
+            sb.AppendLine("        int depth = 0;");
+            sb.AppendLine("        string curr = \"\";");
+            sb.AppendLine("        bool inQuotes = false;");
+            sb.AppendLine("        for (size_t i = 0; i < t.length(); i++) {");
+            sb.AppendLine("            char c = t[i];");
+            sb.AppendLine("            if (c == '\"' && (i == 0 || t[i-1] != '\\\\')) inQuotes = !inQuotes;");
+            sb.AppendLine("            if (!inQuotes) {");
+            sb.AppendLine("                if (c == '[') depth++;");
+            sb.AppendLine("                else if (c == ']') depth--;");
+            sb.AppendLine("                else if (c == ',' && depth == 0) {");
+            sb.AppendLine("                    list.push_back(trim(curr));");
+            sb.AppendLine("                    curr = \"\";");
+            sb.AppendLine("                    continue;");
+            sb.AppendLine("                }");
+            sb.AppendLine("            }");
+            sb.AppendLine("            curr += c;");
             sb.AppendLine("        }");
+            sb.AppendLine("        list.push_back(trim(curr));");
+            sb.AppendLine("        return list;");
+            sb.AppendLine("    }");
+            sb.AppendLine("    template<typename T>");
+            sb.AppendLine("    vector<T> parse_vector(const string& raw_s, T(*parser)(const string&)) {");
+            sb.AppendLine("        vector<string> parts = splitJsonArray(raw_s);");
+            sb.AppendLine("        vector<T> res;");
+            sb.AppendLine("        for (const string& p : parts) res.push_back(parser(p));");
             sb.AppendLine("        return res;");
             sb.AppendLine("    }");
-            sb.AppendLine("    vector<string> parse_vector_string(const string& raw_s) {");
-            sb.AppendLine("        string s = trim(raw_s);");
-            sb.AppendLine("        vector<string> res;");
-            sb.AppendLine("        if (s.length() < 2 || s.front() != '[' || s.back() != ']') return res;");
-            sb.AppendLine("        string content = s.substr(1, s.length() - 2);");
-            sb.AppendLine("        if (content.empty()) return res;");
-            sb.AppendLine("        stringstream ss(content);");
-            sb.AppendLine("        string token;");
-            sb.AppendLine("        while (getline(ss, token, ',')) {");
-            sb.AppendLine("            res.push_back(parse_string(token));");
-            sb.AppendLine("        }");
+            sb.AppendLine("    template<typename T>");
+            sb.AppendLine("    vector<vector<T>> parse_matrix(const string& raw_s, T(*parser)(const string&)) {");
+            sb.AppendLine("        vector<string> parts = splitJsonArray(raw_s);");
+            sb.AppendLine("        vector<vector<T>> res;");
+            sb.AppendLine("        for (const string& p : parts) res.push_back(parse_vector<T>(p, parser));");
             sb.AppendLine("        return res;");
             sb.AppendLine("    }");
+            sb.AppendLine("    long long parse_long(const string& s) { return stoll(trim(s)); }");
             sb.AppendLine("    ListNode* parse_list_node(const string& raw_s) {");
             sb.AppendLine("        string s = trim(raw_s);");
             sb.AppendLine("        if (s.length() < 2 || s.front() != '[' || s.back() != ']') return nullptr;");
@@ -548,10 +660,11 @@ namespace dotnetBitSmith.Services {
             sb.AppendLine("        return root;");
             sb.AppendLine("    }");
             sb.AppendLine("    void print_val(int val) { cout << val; }");
+            sb.AppendLine("    void print_val(long long val) { cout << val; }");
             sb.AppendLine("    void print_val(double val) { cout << val; }");
             sb.AppendLine("    void print_val(bool val) { cout << (val ? \"true\" : \"false\"); }");
-            sb.AppendLine("    void print_val(const string& val) { cout << val; }");
-            sb.AppendLine("    void print_val(char val) { cout << val; }");
+            sb.AppendLine("    void print_val(const string& val) { cout << \"\\\"\" << val << \"\\\"\"; }");
+            sb.AppendLine("    void print_val(char val) { cout << \"\\\"\" << val << \"\\\"\"; }");
             sb.AppendLine("    void print_val(ListNode* head) {");
             sb.AppendLine("        cout << \"[\";");
             sb.AppendLine("        ListNode* curr = head;");
@@ -611,27 +724,19 @@ namespace dotnetBitSmith.Services {
             sb.AppendLine();
             var callArgs = new List<string>();
             for (int i = 0; i < paramTypes.Count; i++) {
-                string cppType;
-                string parser;
-                switch (paramTypes[i]) {
-                    case "integer": cppType = "int"; parser = $"BitSmithRunner::parse_int(line{i})"; break;
-                    case "double": cppType = "double"; parser = $"BitSmithRunner::parse_double(line{i})"; break;
-                    case "float": cppType = "float"; parser = $"BitSmithRunner::parse_double(line{i})"; break;
-                    case "boolean": cppType = "bool"; parser = $"BitSmithRunner::parse_bool(line{i})"; break;
-                    case "string": cppType = "string"; parser = $"BitSmithRunner::parse_string(line{i})"; break;
-                    case "character": cppType = "char"; parser = $"BitSmithRunner::parse_char(line{i})"; break;
-                    case "integer[]": cppType = "vector<int>"; parser = $"BitSmithRunner::parse_vector_int(line{i})"; break;
-                    case "string[]": cppType = "vector<string>"; parser = $"BitSmithRunner::parse_vector_string(line{i})"; break;
-                    case "ListNode": cppType = "ListNode*"; parser = $"BitSmithRunner::parse_list_node(line{i})"; break;
-                    case "TreeNode": cppType = "TreeNode*"; parser = $"BitSmithRunner::parse_tree_node(line{i})"; break;
-                    default: cppType = "vector<int>"; parser = $"BitSmithRunner::parse_vector_int(line{i})"; break;
-                }
+                string cppType = GetCppType(paramTypes[i]);
+                string parser = GetCppParser(paramTypes[i], $"line{i}");
                 sb.AppendLine($"        {cppType} arg{i} = {parser};");
                 callArgs.Add($"arg{i}");
             }
             sb.AppendLine("        Solution sol;");
-            sb.AppendLine($"        auto res = sol.{methodName}({string.Join(", ", callArgs)});");
-            sb.AppendLine("        BitSmithRunner::print_val(res);");
+            if (returnType == "void") {
+                sb.AppendLine($"        sol.{methodName}({string.Join(", ", callArgs)});");
+                if (paramTypes.Count > 0) sb.AppendLine("        BitSmithRunner::print_val(arg0);");
+            } else {
+                sb.AppendLine($"        auto res = sol.{methodName}({string.Join(", ", callArgs)});");
+                sb.AppendLine("        BitSmithRunner::print_val(res);");
+            }
             sb.AppendLine("        cout << endl;");
             sb.AppendLine("    }");
             sb.AppendLine("    return 0;");
@@ -647,6 +752,8 @@ namespace dotnetBitSmith.Services {
             sb.AppendLine("#include <string.h>");
             sb.AppendLine("#include <stdbool.h>");
             sb.AppendLine("#include <math.h>");
+            sb.AppendLine("#include <limits.h>");
+            sb.AppendLine("#include <ctype.h>");
             sb.AppendLine();
             sb.AppendLine("struct ListNode {");
             sb.AppendLine("    int val;");
@@ -671,6 +778,7 @@ namespace dotnetBitSmith.Services {
 }
 
 int parse_int(char* s) { return atoi(trim(s)); }
+long long parse_long(char* s) { return strtoll(trim(s), NULL, 10); }
 double parse_double(char* s) { return atof(trim(s)); }
 bool parse_bool(char* s) {
     char* t = trim(s);
@@ -1014,6 +1122,10 @@ void print_tree_node(struct TreeNode* root) {
                         sb.AppendLine($"        int arg{i} = parse_int(line{i});");
                         callArgs.Add($"arg{i}");
                         break;
+                    case "long":
+                        sb.AppendLine($"        long long arg{i} = parse_long(line{i});");
+                        callArgs.Add($"arg{i}");
+                        break;
                     case "double":
                         sb.AppendLine($"        double arg{i} = parse_double(line{i});");
                         callArgs.Add($"arg{i}");
@@ -1073,6 +1185,7 @@ void print_tree_node(struct TreeNode* root) {
             string cReturnType;
             switch (returnType) {
                 case "integer": cReturnType = "int"; break;
+                case "long": cReturnType = "long long"; break;
                 case "double": cReturnType = "double"; break;
                 case "float": cReturnType = "float"; break;
                 case "boolean": cReturnType = "bool"; break;
@@ -1096,42 +1209,40 @@ void print_tree_node(struct TreeNode* root) {
                     callArgs.Add("&returnSize");
                 }
             }
-            sb.AppendLine($"        {cReturnType} res = {methodName}({string.Join(", ", callArgs)});");
-            switch (returnType) {
-                case "integer":
-                    sb.AppendLine("        print_int(res);");
-                    break;
-                case "double":
-                case "float":
-                    sb.AppendLine("        print_double(res);");
-                    break;
-                case "boolean":
-                    sb.AppendLine("        print_bool(res);");
-                    break;
-                case "string":
-                    sb.AppendLine("        print_string(res);");
-                    break;
-                case "character":
-                    sb.AppendLine("        print_char(res);");
-                    break;
-                case "integer[]":
-                    sb.AppendLine("        print_vector_int(res, returnSize);");
-                    break;
-                case "string[]":
-                    sb.AppendLine("        print_vector_string(res, returnSize);");
-                    break;
-                case "integer[][]":
-                    sb.AppendLine("        print_matrix_int(res, returnSize, returnColumnSizes);");
-                    break;
-                case "ListNode":
-                    sb.AppendLine("        print_list_node(res);");
-                    break;
-                case "TreeNode":
-                    sb.AppendLine("        print_tree_node(res);");
-                    break;
-                default:
-                    sb.AppendLine("        print_int(res);");
-                    break;
+            if (returnType == "void") {
+                sb.AppendLine($"        {methodName}({string.Join(", ", callArgs)});");
+                if (paramTypes.Count > 0) {
+                    switch (paramTypes[0]) {
+                        case "integer": sb.AppendLine("        print_int(arg0);"); break;
+                        case "double":
+                        case "float": sb.AppendLine("        print_double(arg0);"); break;
+                        case "boolean": sb.AppendLine("        print_bool(arg0);"); break;
+                        case "string": sb.AppendLine("        print_string(arg0);"); break;
+                        case "character": sb.AppendLine("        print_char(arg0);"); break;
+                        case "integer[]": sb.AppendLine("        print_vector_int(arg0, arg0Size);"); break;
+                        case "string[]": sb.AppendLine("        print_vector_string(arg0, arg0Size);"); break;
+                        case "integer[][]": sb.AppendLine("        print_matrix_int(arg0, arg0Size, arg0ColSize);"); break;
+                        case "ListNode": sb.AppendLine("        print_list_node(arg0);"); break;
+                        case "TreeNode": sb.AppendLine("        print_tree_node(arg0);"); break;
+                        default: sb.AppendLine("        print_int(arg0);"); break;
+                    }
+                }
+            } else {
+                sb.AppendLine($"        {cReturnType} res = {methodName}({string.Join(", ", callArgs)});");
+                switch (returnType) {
+                    case "integer": sb.AppendLine("        print_int(res);"); break;
+                    case "double":
+                    case "float": sb.AppendLine("        print_double(res);"); break;
+                    case "boolean": sb.AppendLine("        print_bool(res);"); break;
+                    case "string": sb.AppendLine("        print_string(res);"); break;
+                    case "character": sb.AppendLine("        print_char(res);"); break;
+                    case "integer[]": sb.AppendLine("        print_vector_int(res, returnSize);"); break;
+                    case "string[]": sb.AppendLine("        print_vector_string(res, returnSize);"); break;
+                    case "integer[][]": sb.AppendLine("        print_matrix_int(res, returnSize, returnColumnSizes);"); break;
+                    case "ListNode": sb.AppendLine("        print_list_node(res);"); break;
+                    case "TreeNode": sb.AppendLine("        print_tree_node(res);"); break;
+                    default: sb.AppendLine("        print_int(res);"); break;
+                }
             }
             sb.AppendLine("        printf(\"\\n\");");
             sb.AppendLine();
@@ -1256,18 +1367,47 @@ void print_tree_node(struct TreeNode* root) {
             sb.AppendLine("                    attrs = [a for a in dir(sol) if not a.startswith('_')]");
             sb.AppendLine("                    if attrs: method_name = attrs[0]");
             sb.AppendLine("            func = getattr(sol, method_name)");
-            sb.AppendLine("            res = func(*params)");
-            if (returnType == "ListNode") {
-                sb.AppendLine("            res = serialize_list_node(res)");
-            } else if (returnType == "TreeNode") {
-                sb.AppendLine("            res = serialize_tree_node(res)");
+            if (returnType == "void") {
+                sb.AppendLine("            func(*params)");
+                if (paramTypes.Count > 0) {
+                    if (paramTypes[0] == "ListNode") sb.AppendLine("            res = serialize_list_node(params[0])");
+                    else if (paramTypes[0] == "TreeNode") sb.AppendLine("            res = serialize_tree_node(params[0])");
+                    else sb.AppendLine("            res = params[0]");
+                    sb.AppendLine("            if isinstance(res, str): print(res)");
+                    sb.AppendLine("            else: print(json.dumps(res, separators=(',', ':')))");
+                }
+            } else {
+                sb.AppendLine("            res = func(*params)");
+                if (returnType == "ListNode") {
+                    sb.AppendLine("            res = serialize_list_node(res)");
+                } else if (returnType == "TreeNode") {
+                    sb.AppendLine("            res = serialize_tree_node(res)");
+                }
+                sb.AppendLine("            if isinstance(res, str): print(res)");
+                sb.AppendLine("            else: print(json.dumps(res, separators=(',', ':')))");
             }
-            sb.AppendLine("            if isinstance(res, str): print(res)");
-            sb.AppendLine("            else: print(json.dumps(res, separators=(',', ':')))");
             sb.AppendLine("    except Exception as e:");
             sb.AppendLine("        print('ERROR:', e, file=sys.stderr)");
             sb.AppendLine("        sys.exit(1)");
             return sb.ToString();
+        }
+
+        private static string GetCSharpType(string jsonType) {
+            if (jsonType.EndsWith("[]")) {
+                return GetCSharpType(jsonType.Substring(0, jsonType.Length - 2)) + "[]";
+            }
+            switch(jsonType) {
+                case "integer": return "int";
+                case "long": return "long";
+                case "double": return "double";
+                case "float": return "float";
+                case "boolean": return "bool";
+                case "character": return "char";
+                case "string": return "string";
+                case "ListNode": return "ListNode";
+                case "TreeNode": return "TreeNode";
+                default: return "int";
+            }
         }
 
         private static string WrapCsharp(string userCode, string methodName, List<string> paramTypes, string returnType) {
@@ -1388,34 +1528,34 @@ void print_tree_node(struct TreeNode* root) {
             }
             var callArgs = new List<string>();
             for (int i = 0; i < paramTypes.Count; i++) {
-                string csharpType;
+                string csharpType = GetCSharpType(paramTypes[i]);
                 string parser;
-                switch (paramTypes[i]) {
-                    case "integer": csharpType = "int"; parser = $"JsonSerializer.Deserialize<int>(line{i})"; break;
-                    case "double": csharpType = "double"; parser = $"JsonSerializer.Deserialize<double>(line{i})"; break;
-                    case "float": csharpType = "float"; parser = $"JsonSerializer.Deserialize<float>(line{i})"; break;
-                    case "boolean": csharpType = "bool"; parser = $"JsonSerializer.Deserialize<bool>(line{i})"; break;
-                    case "string": csharpType = "string"; parser = $"JsonSerializer.Deserialize<string>(line{i})"; break;
-                    case "character": csharpType = "char"; parser = $"JsonSerializer.Deserialize<char>(line{i})"; break;
-                    case "integer[]": csharpType = "int[]"; parser = $"JsonSerializer.Deserialize<int[]>(line{i})"; break;
-                    case "string[]": csharpType = "string[]"; parser = $"JsonSerializer.Deserialize<string[]>(line{i})"; break;
-                    case "ListNode": csharpType = "ListNode"; parser = $"ParseListNode(line{i})"; break;
-                    case "TreeNode": csharpType = "TreeNode"; parser = $"ParseTreeNode(line{i})"; break;
-                    default: csharpType = "int[]"; parser = $"JsonSerializer.Deserialize<int[]>(line{i})"; break;
-                }
+                if (paramTypes[i] == "ListNode") parser = $"ParseListNode(line{i})";
+                else if (paramTypes[i] == "TreeNode") parser = $"ParseTreeNode(line{i})";
+                else parser = $"JsonSerializer.Deserialize<{csharpType}>(line{i})";
                 sb.AppendLine($"                var arg{i} = {parser};");
                 callArgs.Add($"arg{i}");
             }
             string csharpMethodName = char.ToUpper(methodName[0]) + methodName.Substring(1);
             sb.AppendLine("                var sol = new Solution();");
-            sb.AppendLine($"                var res = sol.{csharpMethodName}({string.Join(", ", callArgs)});");
-            string serializeCall = "res";
-            if (returnType == "ListNode") {
-                serializeCall = "SerializeListNode(res)";
-            } else if (returnType == "TreeNode") {
-                serializeCall = "SerializeTreeNode(res)";
+            if (returnType == "void") {
+                sb.AppendLine($"                sol.{csharpMethodName}({string.Join(", ", callArgs)});");
+                if (paramTypes.Count > 0) {
+                    string serializeCall = "arg0";
+                    if (paramTypes[0] == "ListNode") serializeCall = "SerializeListNode(arg0)";
+                    else if (paramTypes[0] == "TreeNode") serializeCall = "SerializeTreeNode(arg0)";
+                    sb.AppendLine($"                Console.WriteLine(JsonSerializer.Serialize({serializeCall}));");
+                }
+            } else {
+                sb.AppendLine($"                var res = sol.{csharpMethodName}({string.Join(", ", callArgs)});");
+                string serializeCall = "res";
+                if (returnType == "ListNode") {
+                    serializeCall = "SerializeListNode(res)";
+                } else if (returnType == "TreeNode") {
+                    serializeCall = "SerializeTreeNode(res)";
+                }
+                sb.AppendLine($"                Console.WriteLine(JsonSerializer.Serialize({serializeCall}));");
             }
-            sb.AppendLine($"                Console.WriteLine(JsonSerializer.Serialize({serializeCall}));");
             sb.AppendLine("            }");
             sb.AppendLine("        } catch (Exception ex) {");
             sb.AppendLine("            Console.Error.WriteLine(ex.Message);");
@@ -1424,6 +1564,46 @@ void print_tree_node(struct TreeNode* root) {
             sb.AppendLine("    }");
             sb.AppendLine("}");
             return sb.ToString();
+        }
+
+        private static string GetJavaType(string jsonType) {
+            if (jsonType.EndsWith("[]")) return GetJavaType(jsonType.Substring(0, jsonType.Length - 2)) + "[]";
+            switch(jsonType) {
+                case "integer": return "int";
+                case "long": return "long";
+                case "double": return "double";
+                case "float": return "float";
+                case "boolean": return "boolean";
+                case "character": return "char";
+                case "string": return "String";
+                case "ListNode": return "ListNode";
+                case "TreeNode": return "TreeNode";
+                default: return "int";
+            }
+        }
+
+        private static string GetJavaParser(string jsonType, string varLine) {
+            if (jsonType == "ListNode") return $"parseListNode({varLine})";
+            if (jsonType == "TreeNode") return $"parseTreeNode({varLine})";
+            if (jsonType == "integer") return $"Integer.parseInt({varLine}.trim())";
+            if (jsonType == "long") return $"Long.parseLong({varLine}.trim())";
+            if (jsonType == "double") return $"Double.parseDouble({varLine}.trim())";
+            if (jsonType == "float") return $"Float.parseFloat({varLine}.trim())";
+            if (jsonType == "boolean") return $"Boolean.parseBoolean({varLine}.trim())";
+            if (jsonType == "character") return $"{varLine}.trim().replace(\"\\\"\", \"\").charAt(0)";
+            if (jsonType == "string") return $"{varLine}.trim().startsWith(\"\\\"\") ? {varLine}.trim().substring(1, {varLine}.trim().length() - 1) : {varLine}.trim()";
+            
+            if (jsonType == "integer[]") return $"Arrays.stream(splitJsonArray({varLine})).mapToInt(Integer::parseInt).toArray()";
+            if (jsonType == "long[]") return $"Arrays.stream(splitJsonArray({varLine})).mapToLong(Long::parseLong).toArray()";
+            if (jsonType == "double[]") return $"Arrays.stream(splitJsonArray({varLine})).mapToDouble(Double::parseDouble).toArray()";
+            if (jsonType == "string[]") return $"Arrays.stream(splitJsonArray({varLine})).map(s -> s.startsWith(\"\\\"\") ? s.substring(1, s.length() - 1) : s).toArray(String[]::new)";
+            
+            if (jsonType == "integer[][]") return $"Arrays.stream(splitJsonArray({varLine})).map(r -> Arrays.stream(splitJsonArray(r)).mapToInt(Integer::parseInt).toArray()).toArray(int[][]::new)";
+            if (jsonType == "long[][]") return $"Arrays.stream(splitJsonArray({varLine})).map(r -> Arrays.stream(splitJsonArray(r)).mapToLong(Long::parseLong).toArray()).toArray(long[][]::new)";
+            if (jsonType == "double[][]") return $"Arrays.stream(splitJsonArray({varLine})).map(r -> Arrays.stream(splitJsonArray(r)).mapToDouble(Double::parseDouble).toArray()).toArray(double[][]::new)";
+            if (jsonType == "string[][]") return $"Arrays.stream(splitJsonArray({varLine})).map(r -> Arrays.stream(splitJsonArray(r)).map(s -> s.startsWith(\"\\\"\") ? s.substring(1, s.length() - 1) : s).toArray(String[]::new)).toArray(String[][]::new)";
+
+            return $"null";
         }
 
         private static string WrapJava(string userCode, string methodName, List<string> paramTypes, string returnType) {
@@ -1553,6 +1733,33 @@ void print_tree_node(struct TreeNode* root) {
             sb.AppendLine("        return sb.toString();");
             sb.AppendLine("    }");
             sb.AppendLine();
+            sb.AppendLine("    private static String[] splitJsonArray(String s) {");
+            sb.AppendLine("        s = s.trim();");
+            sb.AppendLine("        if (s.length() < 2) return new String[0];");
+            sb.AppendLine("        s = s.substring(1, s.length() - 1).trim();");
+            sb.AppendLine("        if (s.isEmpty()) return new String[0];");
+            sb.AppendLine("        java.util.List<String> list = new java.util.ArrayList<>();");
+            sb.AppendLine("        int depth = 0;");
+            sb.AppendLine("        StringBuilder curr = new StringBuilder();");
+            sb.AppendLine("        boolean inQuotes = false;");
+            sb.AppendLine("        for (int i = 0; i < s.length(); i++) {");
+            sb.AppendLine("            char c = s.charAt(i);");
+            sb.AppendLine("            if (c == '\"' && (i == 0 || s.charAt(i - 1) != '\\\\')) inQuotes = !inQuotes;");
+            sb.AppendLine("            if (!inQuotes) {");
+            sb.AppendLine("                if (c == '[') depth++;");
+            sb.AppendLine("                else if (c == ']') depth--;");
+            sb.AppendLine("                else if (c == ',' && depth == 0) {");
+            sb.AppendLine("                    list.add(curr.toString().trim());");
+            sb.AppendLine("                    curr = new StringBuilder();");
+            sb.AppendLine("                    continue;");
+            sb.AppendLine("                }");
+            sb.AppendLine("            }");
+            sb.AppendLine("            curr.append(c);");
+            sb.AppendLine("        }");
+            sb.AppendLine("        list.add(curr.toString().trim());");
+            sb.AppendLine("        return list.toArray(new String[0]);");
+            sb.AppendLine("    }");
+            sb.AppendLine();
 
             // Java Main Execution Loop
             sb.AppendLine("    public static void main(String[] args) {");
@@ -1570,58 +1777,29 @@ void print_tree_node(struct TreeNode* root) {
             
             var callArgs = new List<string>();
             for (int i = 0; i < paramTypes.Count; i++) {
-                string javaType;
-                string parser;
-                switch (paramTypes[i]) {
-                    case "integer": javaType = "int"; parser = $"Integer.parseInt(lines[{i}].trim())"; break;
-                    case "double": javaType = "double"; parser = $"Double.parseDouble(lines[{i}].trim())"; break;
-                    case "float": javaType = "float"; parser = $"Float.parseFloat(lines[{i}].trim())"; break;
-                    case "boolean": javaType = "boolean"; parser = $"Boolean.parseBoolean(lines[{i}].trim())"; break;
-                    case "string": 
-                        javaType = "String"; 
-                        parser = $"lines[{i}].trim().startsWith(\"\\\"\") ? lines[{i}].trim().substring(1, lines[{i}].trim().length() - 1) : lines[{i}].trim()"; 
-                        break;
-                    case "character": 
-                        javaType = "char"; 
-                        parser = $"lines[{i}].trim().replace(\"\\\"\", \"\").charAt(0)"; 
-                        break;
-                    case "integer[]": 
-                        javaType = "int[]"; 
-                        parser = $"Arrays.stream(lines[{i}].trim().substring(1, lines[{i}].trim().length() - 1).split(\",\")).map(String::trim).filter(s -> !s.isEmpty()).mapToInt(Integer::parseInt).toArray()"; 
-                        break;
-                    case "string[]": 
-                        javaType = "String[]"; 
-                        parser = $"Arrays.stream(lines[{i}].trim().substring(1, lines[{i}].trim().length() - 1).split(\",\")).map(String::trim).map(s -> s.startsWith(\"\\\"\") ? s.substring(1, s.length() - 1) : s).toArray(String[]::new)"; 
-                        break;
-                    case "ListNode": javaType = "ListNode"; parser = $"parseListNode(lines[{i}])"; break;
-                    case "TreeNode": javaType = "TreeNode"; parser = $"parseTreeNode(lines[{i}])"; break;
-                    default: 
-                        javaType = "int[]"; 
-                        parser = $"Arrays.stream(lines[{i}].trim().substring(1, lines[{i}].trim().length() - 1).split(\",\")).map(String::trim).filter(s -> !s.isEmpty()).mapToInt(Integer::parseInt).toArray()"; 
-                        break;
-                }
+                string javaType = GetJavaType(paramTypes[i]);
+                string parser = GetJavaParser(paramTypes[i], $"lines[{i}]");
                 sb.AppendLine($"                {javaType} arg{i} = {parser};");
                 callArgs.Add($"arg{i}");
             }
             sb.AppendLine("                Solution sol = new Solution();");
             
-            // Format method call
-            string serializedRes = "res";
-            if (returnType == "ListNode") {
-                serializedRes = "serializeListNode(res)";
-            } else if (returnType == "TreeNode") {
-                serializedRes = "serializeTreeNode(res)";
-            } else if (returnType.EndsWith("[]")) {
-                serializedRes = "Arrays.toString(res).replace(\" \", \"\")";
-            }
-            
-            sb.AppendLine($"                var res = sol.{methodName}({string.Join(", ", callArgs)});");
-            if (returnType == "ListNode" || returnType == "TreeNode") {
-                sb.AppendLine($"                System.out.println({serializedRes});");
-            } else if (returnType.EndsWith("[]")) {
-                sb.AppendLine($"                System.out.println({serializedRes});");
+            if (returnType == "void") {
+                sb.AppendLine($"                sol.{methodName}({string.Join(", ", callArgs)});");
+                if (paramTypes.Count > 0) {
+                    string serializedRes = "arg0";
+                    if (paramTypes[0] == "ListNode") serializedRes = "serializeListNode(arg0)";
+                    else if (paramTypes[0] == "TreeNode") serializedRes = "serializeTreeNode(arg0)";
+                    else if (paramTypes[0].EndsWith("[]")) serializedRes = "Arrays.toString(arg0).replace(\" \", \"\")";
+                    sb.AppendLine($"                System.out.println({serializedRes});");
+                }
             } else {
-                sb.AppendLine($"                System.out.println(res);");
+                string serializedRes = "res";
+                if (returnType == "ListNode") serializedRes = "serializeListNode(res)";
+                else if (returnType == "TreeNode") serializedRes = "serializeTreeNode(res)";
+                else if (returnType.EndsWith("[]")) serializedRes = "Arrays.toString(res).replace(\" \", \"\")";
+                sb.AppendLine($"                var res = sol.{methodName}({string.Join(", ", callArgs)});");
+                sb.AppendLine($"                System.out.println({serializedRes});");
             }
             sb.AppendLine("            }");
             sb.AppendLine("        } catch (Exception ex) {");

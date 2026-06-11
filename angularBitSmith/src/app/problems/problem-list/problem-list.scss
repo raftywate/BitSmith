@@ -355,6 +355,11 @@
   align-items: center;
 }
 
+.problem-table__head--logged-in,
+.problem-row--logged-in {
+  grid-template-columns: 2rem 5rem minmax(0, 1.5fr) 10rem minmax(0, 1.15fr);
+}
+
 .problem-table__head {
   padding: 0 1rem 0.35rem;
   color: var(--text-muted);
@@ -493,4 +498,35 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.heatmap {
+  display: grid;
+  grid-template-rows: repeat(7, minmax(0.9rem, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0.9rem, 1fr);
+  gap: 0.25rem;
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+}
+
+.heatmap__day {
+  aspect-ratio: 1;
+  min-width: 0.9rem;
+  border-radius: 0.22rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border-color);
+}
+
+.heatmap__day[data-level='2'] {
+  background: color-mix(in srgb, var(--accent) 35%, var(--surface-2));
+}
+
+.heatmap__day[data-level='3'] {
+  background: color-mix(in srgb, var(--accent) 65%, var(--surface-2));
+}
+
+.heatmap__day[data-level='4'] {
+  background: var(--accent-strong);
 }

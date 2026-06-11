@@ -7,4 +7,5 @@ export interface ProblemSummary {
     problemNumber: number;
     difficulty: ProblemDifficulty;
     categories: Category[];
+    status?: 'Solved' | 'Attempted' | 'Unattempted';
 }

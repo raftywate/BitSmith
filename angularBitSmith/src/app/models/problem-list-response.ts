@@ -5,6 +5,9 @@ export interface ProblemListResponse {
   pageNumber: number;
   pageSize: number;
   totalCount: number;
+  totalEasy: number;
+  totalMedium: number;
+  totalHard: number;
   totalPages: number;
   hasPreviousPage: boolean;
   hasNextPage: boolean;

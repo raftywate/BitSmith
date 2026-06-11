@@ -16,9 +16,11 @@ export interface ProblemDetail {
   description: string;
   difficulty: ProblemDifficulty;
   starterCode: string | null;
+  metaDataJson?: string | null;
   hints: string[];
   categories: Category[];
   sampleTestCases: SampleTestCase[];
   testCases?: SampleTestCase[];
   authorName: string;
+  status?: 'Solved' | 'Attempted' | 'Unattempted';
 }

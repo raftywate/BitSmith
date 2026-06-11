@@ -8,10 +8,12 @@ namespace dotnetBitSmith.Models.Problems {
         public string Description { get; set; }     
         public ProblemDifficulty Difficulty { get; set; }
         public string? StarterCode { get; set; }
+        public string? MetaDataJson { get; set; }
         public List<string> Hints { get; set; } = new();
         public List<CategoryModel> Categories { get; set; } = new();
         public List<TestCaseModel> SampleTestCases { get; set; } = new();
-        public List<TestCaseModel> TestCases { get; set; } = new();
+        public List<TestCaseModel>? TestCases { get; set; } = new();
         public string AuthorName { get; set; }
+        public string? Status { get; set; }
     }
 }

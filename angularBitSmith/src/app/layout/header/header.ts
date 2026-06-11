@@ -10,7 +10,7 @@ import { filter } from 'rxjs';
 
 @Component({
     selector: 'app-header',
-    imports: [CommonModule, RouterLink, RouterLinkActive],
+    imports: [CommonModule, RouterLink],
     templateUrl: './header.html',
     styleUrl: './header.scss'
 })

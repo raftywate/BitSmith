@@ -3,6 +3,7 @@ using dotnetBitSmith.Entities;
 using dotnetBitSmith.Exceptions;
 using dotnetBitSmith.Interfaces;
 using dotnetBitSmith.Models.Problems;
+using dotnetBitSmith.Entities.Enums;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
@@ -40,6 +41,19 @@ namespace dotnetBitSmith.Services {
                 }
             }
 
+            // Status filter: requires UserId to be set
+            if (parameters.UserId.HasValue && !string.IsNullOrEmpty(parameters.StatusFilter)) {
+                var statusFilter = parameters.StatusFilter.ToLower();
+                if (statusFilter == "solved") {
+                    query = query.Where(p => _context.Submissions.Any(s => s.UserId == parameters.UserId.Value && s.ProblemId == p.Id && s.Status == SubmissionStatus.Accepted));
+                } else if (statusFilter == "attempted") {
+                    query = query.Where(p => _context.Submissions.Any(s => s.UserId == parameters.UserId.Value && s.ProblemId == p.Id) &&
+                                            !_context.Submissions.Any(s => s.UserId == parameters.UserId.Value && s.ProblemId == p.Id && s.Status == SubmissionStatus.Accepted));
+                } else if (statusFilter == "unattempted") {
+                    query = query.Where(p => !_context.Submissions.Any(s => s.UserId == parameters.UserId.Value && s.ProblemId == p.Id));
+                }
+            }
+
             // Get filtered total count (for pagination)
             var totalCount = await query.CountAsync();
 
@@ -63,15 +77,41 @@ namespace dotnetBitSmith.Services {
                 })
                 .ToListAsync();
 
+            if (parameters.UserId.HasValue) {
+                var problemIds = problems.Select(p => p.Id).ToList();
+                var userSubs = await _context.Submissions
+                    .Where(s => s.UserId == parameters.UserId.Value && problemIds.Contains(s.ProblemId))
+                    .Select(s => new { s.ProblemId, s.Status })
+                    .ToListAsync();
+                
+                foreach (var p in problems) {
+                    var probSubs = userSubs.Where(s => s.ProblemId == p.Id).ToList();
+                    if (probSubs.Any(s => s.Status == SubmissionStatus.Accepted)) {
+                        p.Status = "Solved";
+                    } else if (probSubs.Any()) {
+                        p.Status = "Attempted";
+                    } else {
+                        p.Status = "Unattempted";
+                    }
+                }
+            }
+
+            var totalEasy = await query.CountAsync(p => p.Difficulty == ProblemDifficulty.Easy);
+            var totalMedium = await query.CountAsync(p => p.Difficulty == ProblemDifficulty.Medium);
+            var totalHard = await query.CountAsync(p => p.Difficulty == ProblemDifficulty.Hard);
+
             return new ProblemSummaryListModel {
                 Problems = problems,
                 TotalCount = totalCount,
+                TotalEasy = totalEasy,
+                TotalMedium = totalMedium,
+                TotalHard = totalHard,
                 PageNumber = parameters.PageNumber,
                 PageSize = parameters.PageSize
             };
         }
 
-        public async Task<ProblemDetailModel> GetProblemByIdAsync(Guid problemId) {
+        public async Task<ProblemDetailModel> GetProblemByIdAsync(Guid problemId, Guid? userId = null) {
             _logger.LogInformation("Fetching problem details for Id {ProblemId}", problemId);
 
             var problem = await _context.Problems
@@ -95,13 +135,14 @@ namespace dotnetBitSmith.Services {
                 })
                 .ToList();
 
-            return new ProblemDetailModel {
+            var detailModel = new ProblemDetailModel {
                 Id = problem.Id,
                 ProblemNumber = problem.ProblemNumber,
                 Title = problem.Title,
                 Description = problem.Description,
                 Difficulty = problem.Difficulty,
                 StarterCode = problem.StarterCode,
+                MetaDataJson = problem.MetaDataJson,
                 Hints = DeserializeStringList(problem.HintsJson),
                 AuthorName = problem.Author != null ? (problem.Author.DisplayName ?? problem.Author.Username) : "Unknown",
                 Categories = problem.ProblemCategories.Select(pc => new CategoryModel {
@@ -112,6 +153,22 @@ namespace dotnetBitSmith.Services {
                 SampleTestCases = testCases.Where(testCase => !testCase.IsHidden).ToList(),
                 TestCases = testCases
             };
+
+            if (userId.HasValue) {
+                var userSubs = await _context.Submissions
+                    .Where(s => s.UserId == userId.Value && s.ProblemId == problemId)
+                    .Select(s => s.Status)
+                    .ToListAsync();
+                if (userSubs.Any(s => s == SubmissionStatus.Accepted)) {
+                    detailModel.Status = "Solved";
+                } else if (userSubs.Any()) {
+                    detailModel.Status = "Attempted";
+                } else {
+                    detailModel.Status = "Unattempted";
+                }
+            }
+
+            return detailModel;
         }
 
         public async Task<ProblemDetailModel> CreateProblemAsync(ProblemCreateModel model, Guid authorId) {
@@ -129,6 +186,7 @@ namespace dotnetBitSmith.Services {
                     Description = model.Description,
                     Difficulty = model.Difficulty,
                     StarterCode = model.StarterCode,
+                    MetaDataJson = model.MetaDataJson,
                     HintsJson = SerializeStringList(model.Hints),
                     AuthorId = authorId,
                     CreatedAt = DateTime.UtcNow
@@ -188,6 +246,7 @@ namespace dotnetBitSmith.Services {
                 problem.Description = model.Description;
                 problem.Difficulty = model.Difficulty;
                 problem.StarterCode = model.StarterCode;
+                problem.MetaDataJson = model.MetaDataJson;
                 problem.HintsJson = SerializeStringList(model.Hints);
 
                 var nextCategoryIds = model.CategoryIDs ?? new List<Guid>();
@@ -271,6 +330,122 @@ namespace dotnetBitSmith.Services {
 
             await _context.SaveChangesAsync();
             return await GetProblemByIdAsync(problemId);
+        }
+
+        public async Task<ProblemSummaryModel> GetProblemOfTheDayAsync(DateOnly date) {
+            var pod = await _context.ProblemOfTheDays
+                .FirstOrDefaultAsync(x => x.Date == date);
+
+            if (pod == null) {
+                // Pick a random problem
+                var count = await _context.Problems.CountAsync();
+                if (count == 0) throw new NotFoundException("No problems available to set as Problem of the Day.");
+                
+                var random = new Random();
+                var skip = random.Next(0, count);
+                var randomProblem = await _context.Problems.Skip(skip).FirstOrDefaultAsync();
+                
+                pod = new ProblemOfTheDay {
+                    Id = Guid.NewGuid(),
+                    Date = date,
+                    ProblemId = randomProblem!.Id
+                };
+                _context.ProblemOfTheDays.Add(pod);
+                await _context.SaveChangesAsync();
+            }
+
+            var problem = await _context.Problems
+                .AsNoTracking()
+                .Include(p => p.ProblemCategories)
+                    .ThenInclude(pc => pc.Category)
+                .FirstOrDefaultAsync(p => p.Id == pod.ProblemId)
+                ?? throw new NotFoundException("Problem associated with POD not found.");
+
+            return new ProblemSummaryModel {
+                Id = problem.Id,
+                Title = problem.Title,
+                ProblemNumber = problem.ProblemNumber,
+                Difficulty = problem.Difficulty,
+                Categories = problem.ProblemCategories.Select(pc => new CategoryModel {
+                    Id = pc.Category != null ? pc.Category.Id : Guid.Empty,
+                    Name = pc.Category != null ? pc.Category.Name : "Unknown",
+                    Slug = pc.Category != null ? pc.Category.Slug : "unknown"
+                }).ToList()
+            };
+        }
+
+        public async Task<ProblemSummaryModel> SetProblemOfTheDayAsync(DateOnly date, Guid problemId) {
+            var problem = await _context.Problems.FindAsync(problemId)
+                ?? throw new NotFoundException("Problem not found.");
+
+            var pod = await _context.ProblemOfTheDays.FirstOrDefaultAsync(x => x.Date == date);
+            if (pod != null) {
+                pod.ProblemId = problemId;
+            } else {
+                pod = new ProblemOfTheDay {
+                    Id = Guid.NewGuid(),
+                    Date = date,
+                    ProblemId = problemId
+                };
+                _context.ProblemOfTheDays.Add(pod);
+            }
+            await _context.SaveChangesAsync();
+            return await GetProblemOfTheDayAsync(date);
+        }
+
+        public async Task<PoDActivityModel> GetPoDActivityAsync(Guid userId, int tzOffsetMinutes, DateOnly todayLocal) {
+            // Find all PoDs
+            var pods = await _context.ProblemOfTheDays.ToListAsync();
+            
+            // For each PoD, check if there's a successful submission by the user ON THAT DATE
+            var solvedDates = new List<DateOnly>();
+            foreach (var pod in pods) {
+                // podDateStart in UTC
+                var podDateStart = pod.Date.ToDateTime(TimeOnly.MinValue).AddMinutes(tzOffsetMinutes);
+                var podDateEnd = podDateStart.AddDays(1);
+
+                var hasSolved = await _context.Submissions.AnyAsync(s => 
+                    s.UserId == userId && 
+                    s.ProblemId == pod.ProblemId && 
+                    s.Status == dotnetBitSmith.Entities.Enums.SubmissionStatus.Accepted &&
+                    s.CreatedAt >= podDateStart && 
+                    s.CreatedAt < podDateEnd);
+
+                if (hasSolved) {
+                    solvedDates.Add(pod.Date);
+                }
+            }
+
+            var sortedSolved = solvedDates.OrderByDescending(d => d).ToList();
+            
+            int streak = 0;
+            var today = todayLocal;
+            var yesterday = today.AddDays(-1);
+
+            DateOnly currentDateToCheck = today;
+
+            if (sortedSolved.Contains(today)) {
+                streak++;
+                currentDateToCheck = yesterday;
+            } else if (sortedSolved.Contains(yesterday)) {
+                // If they haven't solved today, but solved yesterday, the streak is still alive
+                currentDateToCheck = yesterday;
+            } else {
+                return new PoDActivityModel { SolvedDates = sortedSolved.Select(d => d.ToString("yyyy-MM-dd")).ToList(), CurrentStreak = 0 };
+            }
+
+            // Count backwards from currentDateToCheck
+            while (sortedSolved.Contains(currentDateToCheck)) {
+                if (currentDateToCheck != today) {
+                    streak++;
+                }
+                currentDateToCheck = currentDateToCheck.AddDays(-1);
+            }
+
+            return new PoDActivityModel {
+                SolvedDates = sortedSolved.Select(d => d.ToString("yyyy-MM-dd")).ToList(),
+                CurrentStreak = streak
+            };
         }
 
         private static string? SerializeStringList(IEnumerable<string>? values) {

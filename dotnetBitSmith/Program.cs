@@ -312,6 +312,16 @@ if (args.Contains("--import-leetcode")) {
             await context.Database.ExecuteSqlRawAsync(@"
                 IF NOT EXISTS (
                     SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Problems]') 
+                    AND name = N'MetaDataJson'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Problems] ADD [MetaDataJson] NVARCHAR(MAX) NULL;
+                END
+            ");
+            await context.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
                     WHERE object_id = OBJECT_ID(N'[dbo].[TestCases]') 
                     AND name = N'InputLabelsJson'
                 )

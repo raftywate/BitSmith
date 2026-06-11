@@ -181,8 +181,19 @@
         <div class="problem-header-merged__top">
           <span class="eyebrow eyebrow--small">Problem {{ problemModel.problemNumber }}</span>
           <div class="problem-header-merged__actions">
-            @if (authService.isAdmin$()) {
+            @if (authService.isAdmin$() && problemModel.problemNumber > 225) {
             <a class="btn btn--subtle btn--small" [routerLink]="['/admin']" [queryParams]="{ problemId: problemModel.id }">Edit</a>
+            }
+            @if (authService.isLoggedIn$() && problemModel.status && problemModel.status !== 'Unattempted') {
+              <span class="difficulty-chip" style="background: var(--surface-2); border-color: var(--border-color); color: var(--text-muted); display: inline-flex; align-items: center; gap: 0.35rem;">
+                @if (problemModel.status === 'Solved') {
+                  <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="color: #00b8a3;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                  <span style="color: #00b8a3;">Solved</span>
+                } @else if (problemModel.status === 'Attempted') {
+                  <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="color: #f59e0b;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                  <span style="color: #f59e0b;">Attempted</span>
+                }
+              </span>
             }
             <span class="difficulty-chip" [class.easy]="problemModel.difficulty === ProblemDifficulty.Easy"
               [class.medium]="problemModel.difficulty === ProblemDifficulty.Medium"

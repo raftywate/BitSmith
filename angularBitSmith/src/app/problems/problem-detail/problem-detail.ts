@@ -681,6 +681,13 @@ export class ProblemDetailComponent implements OnDestroy {
 
   updateCode(value: string) {
     this.code.set(value || '');
+    if (typeof localStorage !== 'undefined') {
+      const problemId = this.problemId();
+      const lang = this.editorLanguage();
+      if (problemId && lang) {
+        localStorage.setItem(`compylr.code.${problemId}.${lang}`, value || '');
+      }
+    }
   }
 
   submitCode() {
@@ -1200,6 +1207,16 @@ export class ProblemDetailComponent implements OnDestroy {
   }
 
   private getStarterCode() {
+    const problemId = this.problemId();
+    const lang = this.editorLanguage();
+
+    if (typeof localStorage !== 'undefined' && problemId && lang) {
+      const savedCode = localStorage.getItem(`compylr.code.${problemId}.${lang}`);
+      if (savedCode !== null) {
+        return savedCode;
+      }
+    }
+
     const starterCode = this.problem()?.starterCode?.trim();
     if (starterCode) {
       try {
@@ -1343,7 +1360,17 @@ export class ProblemDetailComponent implements OnDestroy {
       const stored = localStorage.getItem('compylr.layoutState');
       if (stored) {
         try {
-          return JSON.parse(stored);
+          const parsed: Record<DockZoneId, DockZoneState> = JSON.parse(stored);
+          // Reset active tabs to 'description' and 'editor' when opening a problem
+          for (const zoneKey of Object.keys(parsed) as DockZoneId[]) {
+            const zone = parsed[zoneKey];
+            if (zone.tabs.includes('description')) {
+              zone.activeTab = 'description';
+            } else if (zone.tabs.includes('editor')) {
+              zone.activeTab = 'editor';
+            }
+          }
+          return parsed;
         } catch (e) {
           console.error('Failed to parse stored layoutState', e);
         }

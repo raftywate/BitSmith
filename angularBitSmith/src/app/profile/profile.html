@@ -48,12 +48,66 @@
     </aside>
 
     @if (!isEditing()) {
-    <section class="profile-editor panel profile-editor--summary">
-      <div class="profile-editor__header">
-        <span class="eyebrow">Profile</span>
-        <h2>Community presence</h2>
-        <p>Display name and bio are used in solution cards, comments, and your account profile.</p>
+    <section class="profile-editor panel profile-editor--summary" style="display: flex; gap: 2rem; align-items: center; justify-content: center; flex-wrap: wrap;">
+      
+      <!-- Ring Chart -->
+      <div style="position: relative; width: 300px; height: 300px; flex-shrink: 0;">
+        <svg viewBox="0 0 100 100" style="transform: rotate(135deg); width: 100%; height: 100%;">
+          <!-- Easy Background Track -->
+          <circle cx="50" cy="50" [attr.r]="ringRadius" fill="none" stroke="var(--border-color)" stroke-width="6" stroke-linecap="round"
+            [attr.stroke-dasharray]="easyTrack().dash" [attr.stroke-dashoffset]="easyTrack().offset"></circle>
+            
+          <!-- Medium Background Track -->
+          <circle cx="50" cy="50" [attr.r]="ringRadius" fill="none" stroke="var(--border-color)" stroke-width="6" stroke-linecap="round"
+            [attr.stroke-dasharray]="mediumTrack().dash" [attr.stroke-dashoffset]="mediumTrack().offset"></circle>
+            
+          <!-- Hard Background Track -->
+          <circle cx="50" cy="50" [attr.r]="ringRadius" fill="none" stroke="var(--border-color)" stroke-width="6" stroke-linecap="round"
+            [attr.stroke-dasharray]="hardTrack().dash" [attr.stroke-dashoffset]="hardTrack().offset"></circle>
+          
+          <!-- Easy Arc -->
+          @if (profileModel.stats.easySolved > 0) {
+          <circle cx="50" cy="50" [attr.r]="ringRadius" fill="none" stroke="#00b8a3" stroke-width="6" stroke-linecap="round"
+            [attr.stroke-dasharray]="easyArc().dash" [attr.stroke-dashoffset]="easyArc().offset"></circle>
+          }
+            
+          <!-- Medium Arc -->
+          @if (profileModel.stats.mediumSolved > 0) {
+          <circle cx="50" cy="50" [attr.r]="ringRadius" fill="none" stroke="#ffc01e" stroke-width="6" stroke-linecap="round"
+            [attr.stroke-dasharray]="mediumArc().dash" [attr.stroke-dashoffset]="mediumArc().offset"></circle>
+          }
+            
+          <!-- Hard Arc -->
+          @if (profileModel.stats.hardSolved > 0) {
+          <circle cx="50" cy="50" [attr.r]="ringRadius" fill="none" stroke="#ff375f" stroke-width="6" stroke-linecap="round"
+            [attr.stroke-dasharray]="hardArc().dash" [attr.stroke-dashoffset]="hardArc().offset"></circle>
+          }
+        </svg>
+        <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+          <span style="font-size: 3.5rem; font-weight: bold; color: var(--text-strong); line-height: 1.2;">{{ profileModel.stats.totalSolved }}</span>
+          <span style="font-size: 1.3rem; color: var(--text-muted);">/ {{ totalProblems() || '...' }}</span>
+        </div>
       </div>
+
+      <!-- Stats Cards -->
+      <div style="display: flex; flex-direction: column; gap: 1.5rem; flex: 1; min-width: 250px;">
+        <!-- Easy Card -->
+        <div style="background-color: var(--bg-surface); padding: 1.5rem; border-radius: 8px; display: flex; flex-direction: column; align-items: center; box-shadow: var(--shadow-sm);">
+          <span style="color: #00b8a3; font-size: 1.2rem; font-weight: 600; margin-bottom: 0.5rem;">Easy</span>
+          <span style="color: var(--text-strong); font-size: 1.8rem; font-weight: bold;">{{ profileModel.stats.easySolved }}<span style="color: var(--text-muted); font-size: 1.2rem; font-weight: normal;">/{{ totalEasy() || '...' }}</span></span>
+        </div>
+        <!-- Medium Card -->
+        <div style="background-color: var(--bg-surface); padding: 1.5rem; border-radius: 8px; display: flex; flex-direction: column; align-items: center; box-shadow: var(--shadow-sm);">
+          <span style="color: #ffc01e; font-size: 1.2rem; font-weight: 600; margin-bottom: 0.5rem;">Medium</span>
+          <span style="color: var(--text-strong); font-size: 1.8rem; font-weight: bold;">{{ profileModel.stats.mediumSolved }}<span style="color: var(--text-muted); font-size: 1.2rem; font-weight: normal;">/{{ totalMedium() || '...' }}</span></span>
+        </div>
+        <!-- Hard Card -->
+        <div style="background-color: var(--bg-surface); padding: 1.5rem; border-radius: 8px; display: flex; flex-direction: column; align-items: center; box-shadow: var(--shadow-sm);">
+          <span style="color: #ff375f; font-size: 1.2rem; font-weight: 600; margin-bottom: 0.5rem;">Hard</span>
+          <span style="color: var(--text-strong); font-size: 1.8rem; font-weight: bold;">{{ profileModel.stats.hardSolved }}<span style="color: var(--text-muted); font-size: 1.2rem; font-weight: normal;">/{{ totalHard() || '...' }}</span></span>
+        </div>
+      </div>
+
     </section>
     } @else {
     <section class="profile-editor panel">
@@ -97,24 +151,7 @@
       <strong>{{ profileModel.stats.currentStreak }} day streak</strong>
     </div>
 
-    <div class="profile-stats__grid">
-      <article>
-        <span>Total</span>
-        <strong>{{ profileModel.stats.totalSolved }}</strong>
-      </article>
-      <article>
-        <span>Easy</span>
-        <strong>{{ profileModel.stats.easySolved }}</strong>
-      </article>
-      <article>
-        <span>Medium</span>
-        <strong>{{ profileModel.stats.mediumSolved }}</strong>
-      </article>
-      <article>
-        <span>Hard</span>
-        <strong>{{ profileModel.stats.hardSolved }}</strong>
-      </article>
-    </div>
+
 
     <div class="heatmap" aria-label="Accepted submission activity over the last year">
       @for (day of heatmapDays(); track day.date) {

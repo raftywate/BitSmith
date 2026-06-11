@@ -17,5 +17,9 @@ namespace dotnetBitSmith.Models.Problems {
 
         // Filter by one or more category IDs (comma-separated or repeated param)
         public List<Guid>? CategoryIds { get; set; }
+
+        public Guid? UserId { get; set; }
+
+        public string? StatusFilter { get; set; }
     }
 }

@@ -2,17 +2,21 @@
   <div class="admin-page__header glass-panel">
     <div>
       <span class="eyebrow">Admin Console</span>
-      <h1>Problem Management</h1>
-      <p>Create new challenges, define test cases, and publish content to the platform.</p>
+      <h1>{{ isEditRoute() ? 'Edit Problem' : 'Add New Problem' }}</h1>
+      <p>{{ isEditRoute() ? 'Search for a published problem to update its content.' : 'Create new challenges, define test cases, and publish content to the platform.' }}</p>
     </div>
-    <a routerLink="/problems" class="btn btn--ghost">← Back to Problems</a>
+    <div style="display: flex; gap: 0.5rem;">
+      <a routerLink="/admin" class="btn btn--ghost">← Dashboard</a>
+      <a routerLink="/problems" class="btn btn--ghost">Exit</a>
+    </div>
   </div>
 
+  @if (isEditRoute()) {
   <div class="admin-card admin-card--compact panel">
     <div class="admin-card__head-row">
       <div class="admin-card__head">
         <h2>{{ isEditMode ? 'Editing Existing Problem' : 'Edit Existing Problem' }}</h2>
-        <p>Search a published problem and load it into this editor, or continue below to create a new one.</p>
+        <p>Search a published problem and load it into this editor.</p>
       </div>
       @if (isEditMode) {
       <button type="button" class="btn btn--ghost" (click)="cancelEdit()">Cancel Edit Mode</button>
@@ -44,29 +48,41 @@
       }
     </div>
   </div>
+  }
+
+  @if (!isEditRoute() || isEditMode) {
 
   <!-- Step Indicator -->
   <div class="admin-steps">
-    <div class="admin-step" [class.admin-step--active]="activeStep() === 'problem'" [class.admin-step--done]="activeStep() === 'testcases' || activeStep() === 'done'">
+    <div class="admin-step" [class.admin-step--active]="activeStep() === 'problem'" [class.admin-step--done]="activeStep() === 'testcases' || activeStep() === 'review' || activeStep() === 'done'">
       <div class="admin-step__circle">
-        @if (activeStep() === 'testcases' || activeStep() === 'done') {
+        @if (activeStep() === 'testcases' || activeStep() === 'review' || activeStep() === 'done') {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="20 6 9 17 4 12"></polyline></svg>
         } @else { 1 }
       </div>
       <span>Problem Details</span>
     </div>
     <div class="admin-step__connector"></div>
-    <div class="admin-step" [class.admin-step--active]="activeStep() === 'testcases'" [class.admin-step--done]="activeStep() === 'done'">
+    <div class="admin-step" [class.admin-step--active]="activeStep() === 'testcases'" [class.admin-step--done]="activeStep() === 'review' || activeStep() === 'done'">
       <div class="admin-step__circle">
-        @if (activeStep() === 'done') {
+        @if (activeStep() === 'review' || activeStep() === 'done') {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="20 6 9 17 4 12"></polyline></svg>
         } @else { 2 }
       </div>
       <span>Test Cases</span>
     </div>
     <div class="admin-step__connector"></div>
+    <div class="admin-step" [class.admin-step--active]="activeStep() === 'review'" [class.admin-step--done]="activeStep() === 'done'">
+      <div class="admin-step__circle">
+        @if (activeStep() === 'done') {
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        } @else { 3 }
+      </div>
+      <span>Review</span>
+    </div>
+    <div class="admin-step__connector"></div>
     <div class="admin-step" [class.admin-step--active]="activeStep() === 'done'">
-      <div class="admin-step__circle">3</div>
+      <div class="admin-step__circle">4</div>
       <span>Done</span>
     </div>
   </div>
@@ -101,6 +117,7 @@
         <div class="field-row">
           <div>
             <span class="field__label">Hints</span>
+            <br>
             <span class="field__hint">Optional. Add as many progressive hints as this problem needs.</span>
           </div>
           <button type="button" class="btn btn--ghost btn--small" (click)="addHint()">+ Add hint</button>
@@ -212,6 +229,12 @@
         }
       </label>
 
+      <label class="field">
+        <span class="field__label">Method Signature Metadata <span class="field__required">*</span></span>
+        <span class="field__hint">Specify the JSON metadata so the system can generate the execution wrapper. Example: <code>&#123;"name":"solve","params":[&#123;"type":"integer[]"&#125;],"return":&#123;"type":"integer"&#125;&#125;</code></span>
+        <textarea class="input textarea textarea--mono textarea--code" formControlName="metaDataJson" rows="3" placeholder='&#123;&#10;  "name": "solve",&#10;  "params": [&#123;"type": "integer[]"&#125;],&#10;  "return": &#123;"type": "integer"&#125;&#10;&#125;'></textarea>
+      </label>
+
       <div class="field">
         <span class="field__label">Starter Code Templates</span>
         <span class="field__hint">Optional. Provide starter code skeletons for each supported language. Users will see these when starting their attempt.</span>
@@ -305,7 +328,7 @@
         </div>
 
         <div class="testcase-list" formArrayName="testCases">
-          @for (item of sampleCaseIndices; track item.index) {
+          @for (item of sampleCaseIndices; track item.control) {
           <div class="testcase-card testcase-card--sample panel" [formGroupName]="item.index">
             <div class="testcase-card__header">
               <span class="testcase-card__label">Sample {{ $index + 1 }}</span>
@@ -349,7 +372,7 @@
         </div>
 
         <div class="testcase-list" formArrayName="testCases">
-          @for (item of hiddenCaseIndices; track item.index) {
+          @for (item of hiddenCaseIndices; track item.control) {
           <div class="testcase-card testcase-card--hidden panel" [formGroupName]="item.index">
             <div class="testcase-card__header">
               <span class="testcase-card__label">Hidden {{ $index + 1 }}</span>
@@ -381,15 +404,13 @@
       </div>
 
       <div class="admin-form__footer">
-        <button type="button" class="btn btn--ghost" (click)="skipTestCases()">Skip for now</button>
-        <button type="submit" class="btn btn--primary" [disabled]="isAddingTestCases()">
-          @if (isAddingTestCases()) {
-            <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10" stroke-opacity=".25"/><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/></svg>
-            Saving...
-          } @else {
-            {{ isEditMode ? 'Update Test Cases →' : 'Save Test Cases →' }}
-          }
-        </button>
+        <button type="button" class="btn btn--ghost" (click)="goBackToProblem()">← Previous</button>
+        <div style="margin-left: auto; display: flex; gap: 1rem;">
+          <button type="button" class="btn btn--ghost" (click)="skipTestCases()">Skip for now</button>
+          <button type="button" class="btn btn--primary" (click)="goToReview()">
+            Review & Submit →
+          </button>
+        </div>
       </div>
     </form>
     }
@@ -441,18 +462,54 @@ false,"[3,2,4]\n6","[1,2]","nums|target"</code>
       </div>
 
       <div class="admin-form__footer">
-        <button type="button" class="btn btn--ghost" (click)="skipTestCases()">Skip for now</button>
-        <button type="button" class="btn btn--primary" (click)="onSubmitTestCases()" [disabled]="isUploadingFile() || !selectedFile()">
-          @if (isUploadingFile()) {
-            <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10" stroke-opacity=".25"/><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/></svg>
-            Uploading...
-          } @else {
-            Upload & Save →
-          }
-        </button>
+        <button type="button" class="btn btn--ghost" (click)="goBackToProblem()">← Previous</button>
+        <div style="margin-left: auto; display: flex; gap: 1rem;">
+          <button type="button" class="btn btn--ghost" (click)="skipTestCases()">Skip for now</button>
+          <button type="button" class="btn btn--primary" (click)="goToReview()" [disabled]="!selectedFile()">
+            Review & Submit →
+          </button>
+        </div>
       </div>
     </div>
     }
+  </div>
+  }
+
+  <!-- ─── Step 3: Review ─── -->
+  @if (activeStep() === 'review') {
+  <div class="admin-card panel">
+    <div class="admin-card__head">
+      <h2>Review & Submit</h2>
+      <p>Please review the details below before saving test cases. The problem metadata is already saved.</p>
+    </div>
+
+    <div class="review-details">
+      <h3>Problem Metadata</h3>
+      <ul>
+        <li><strong>Title:</strong> {{ problemForm.get('title')?.value }}</li>
+        <li><strong>Difficulty:</strong> {{ problemForm.get('difficulty')?.value }}</li>
+        <li><strong>Categories:</strong> {{ selectedCategories().length }} selected</li>
+      </ul>
+
+      <h3 style="margin-top: 1.5rem;">Test Cases Summary</h3>
+      @if (uploadMode() === 'file') {
+        <p>You have selected a file: <strong>{{ selectedFile()?.name }}</strong> to be uploaded.</p>
+      } @else {
+        <p>You have created <strong>{{ sampleCases.length }}</strong> sample test case(s) and <strong>{{ hiddenCases.length }}</strong> hidden test case(s) manually.</p>
+      }
+    </div>
+
+    <div class="admin-form__footer" style="margin-top: 2rem;">
+      <button type="button" class="btn btn--ghost" (click)="goBackToTestCases()">← Previous</button>
+      <button type="button" class="btn btn--primary" (click)="onSubmitTestCases()" [disabled]="isAddingTestCases() || isUploadingFile()">
+        @if (isAddingTestCases() || isUploadingFile()) {
+          <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10" stroke-opacity=".25"/><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/></svg>
+          Submitting...
+        } @else {
+          Submit Test Cases →
+        }
+      </button>
+    </div>
   </div>
   }
 
@@ -469,5 +526,7 @@ false,"[3,2,4]\n6","[1,2]","nums|target"</code>
       <button type="button" class="btn btn--ghost" (click)="createAnother()">Create Another Problem</button>
     </div>
   </div>
+  }
+  <!-- End of isEditRoute/isEditMode wrapper -->
   }
 </section>

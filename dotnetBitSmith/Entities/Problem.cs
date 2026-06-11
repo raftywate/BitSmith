@@ -25,6 +25,9 @@ namespace dotnetBitSmith.Entities {
         [Column(TypeName = "nvarchar(max)")]
         public string? HintsJson { get; set; }
 
+        [Column(TypeName = "nvarchar(max)")]
+        public string? MetaDataJson { get; set; }
+
         [Required]
         [Column(TypeName = "nvarchar(20)")]
         public ProblemDifficulty Difficulty { get; set; }

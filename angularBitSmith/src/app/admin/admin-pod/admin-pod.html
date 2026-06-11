@@ -1,0 +1,55 @@
+<div class="container" style="max-width: 800px; margin: 2rem auto; min-height: calc(100vh - 120px);">
+  <div class="panel" style="padding: 2.5rem;">
+    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
+      <a routerLink="/admin" class="btn btn--ghost btn--small" style="padding: 0.5rem;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </a>
+      <h1 style="margin: 0; font-size: 1.5rem;">Set Problem of the Day</h1>
+    </div>
+
+    @if (error()) {
+      <div style="padding: 1rem; background: var(--error-surface); color: var(--error-text); border-radius: 8px; margin-bottom: 1rem;">
+        {{ error() }}
+      </div>
+    }
+
+    <form [formGroup]="podForm" (ngSubmit)="onSubmit()">
+      <div class="form-group">
+        <label for="dateStr" class="label">Date</label>
+        <input type="date" id="dateStr" formControlName="dateStr" class="input" />
+      </div>
+
+      <div class="form-group" style="margin-top: 1rem;">
+        <label for="problemSearch" class="label">Search Problem</label>
+        <input type="text" id="problemSearch" [ngModel]="searchQuery()" (ngModelChange)="onSearchInput($event)" [ngModelOptions]="{standalone: true}" class="input" placeholder="Type to search..." />
+      </div>
+
+      @if (isLoading()) {
+        <p style="color: var(--text-muted); font-size: 0.9rem;">Loading problems...</p>
+      }
+
+      <div style="max-height: 500px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; margin-top: 0.5rem;">
+        @for (problem of problems(); track problem.id) {
+          <div style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;"
+               [style.background]="selectedProblemId() === problem.id ? 'var(--surface-3)' : 'transparent'">
+            <div>
+              <strong style="display: block;">{{ problem.problemNumber }}. {{ problem.title }}</strong>
+              <span style="font-size: 0.8rem; color: var(--text-muted);">{{ problem.difficulty }}</span>
+            </div>
+            <button type="button" class="btn btn--small" [class.btn--primary]="selectedProblemId() !== problem.id" [class.btn--ghost]="selectedProblemId() === problem.id" (click)="selectProblem(problem.id)">
+              {{ selectedProblemId() === problem.id ? 'Selected' : 'Select' }}
+            </button>
+          </div>
+        }
+      </div>
+
+      <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+        <button type="submit" class="btn btn--primary" [disabled]="!podForm.valid || !selectedProblemId() || isSubmitting()">
+          {{ isSubmitting() ? 'Saving...' : 'Set Problem of the Day' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

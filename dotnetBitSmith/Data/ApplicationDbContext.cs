@@ -15,6 +15,7 @@ namespace dotnetBitSmith.Data {
         public DbSet<Submission> Submissions { get; set; }
         public DbSet<CodeSnippet> CodeSnippets { get; set; }
         public DbSet<ProblemCategory> ProblemCategories { get; set; }
+        public DbSet<ProblemOfTheDay> ProblemOfTheDays { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder) {
             base.OnModelCreating(modelBuilder);
