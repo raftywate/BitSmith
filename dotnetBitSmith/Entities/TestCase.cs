@@ -14,6 +14,9 @@ namespace dotnetBitSmith.Entities {
         [Column(TypeName = "nvarchar(max)")]
         public string ExpectedOutput { get; set; }
 
+        [Column(TypeName = "nvarchar(max)")]
+        public string? InputLabelsJson { get; set; }
+
         [Required]
         public bool IsHidden { get; set; }
 

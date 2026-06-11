@@ -38,6 +38,11 @@ namespace dotnetBitSmith.Entities {
         public DateTime? UpdatedAt { get; set; }
 
         public DateTime? LastLoginAt { get; set; }
+        
+        [StringLength(50)]
+        public string? PreferredLanguage { get; set; }
+
+        public string? LayoutState { get; set; }
 
         //---Navigation Properties---
         //virtual here is for efficiency since it enables lazy loading. 

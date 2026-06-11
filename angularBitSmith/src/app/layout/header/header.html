@@ -1,59 +1,137 @@
-<header
-    class="bg-white dark:bg-bg-dark border-b border-border-light dark:border-border-dark shadow-sm font-sans transition-colors duration-300">
-    <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
-        <h1 class="text-3xl font-bold text-primary-light dark:text-primary-dark tracking-tight">
-            <a href="/">BitSmith</a>
-        </h1>
+<header class="header-shell">
+    <nav class="header glass-panel">
+        <div class="brand-container">
+            <a routerLink="/problems" class="brand" title="Home Page">
+                <span class="brand__mark">CY</span>
+                @if (isHomePage()) {
+                <span class="brand__copy">
+                    <span class="brand__name">Compylr</span>
+                    <span class="brand__tag">Forge better problem-solving loops</span>
+                </span>
+                }
+            </a>
 
-        <div class="flex items-center space-x-4">
-            <!-- Theme Toggles -->
-            <div
-                class="flex items-center rounded-lg bg-card-light dark:bg-card-dark p-1 border border-border-light dark:border-border-dark">
-                <button (click)="themeService.setLightTheme()" title="Light Mode"
-                    [ngClass]="{'bg-white text-primary-light shadow-sm': themeService.currentTheme() === 'light', 'text-text-secondary-light dark:text-text-secondary-dark hover:text-primary-light dark:hover:text-primary-dark': themeService.currentTheme() !== 'light'}"
-                    class="p-1.5 rounded-md transition-all duration-200">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="5"></circle>
-                        <line x1="12" y1="1" x2="12" y2="3"></line>
-                        <line x1="12" y1="21" x2="12" y2="23"></line>
-                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                        <line x1="1" y1="12" x2="3" y2="12"></line>
-                        <line x1="21" y1="12" x2="23" y2="12"></line>
-                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            @if (isProblemDetailPage()) {
+            <div class="problem-navigation">
+                <a [routerLink]="prevProblemId ? ['/problems', prevProblemId] : null"
+                   class="nav-arrow"
+                   [class.nav-arrow--disabled]="!prevProblemId"
+                   [attr.title]="prevProblemId ? 'Clicking on it will take to the prev problem' : 'No previous problem'">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
                     </svg>
+                </a>
+                <a [routerLink]="nextProblemId ? ['/problems', nextProblemId] : null"
+                   class="nav-arrow"
+                   [class.nav-arrow--disabled]="!nextProblemId"
+                   [attr.title]="nextProblemId ? 'Clicking on it will take to the next problem' : 'No next problem'">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </a>
+            </div>
+            }
+        </div>
+
+        <div class="header__nav">
+            @if (isProblemDetailPage() && authService.isLoggedIn$() && workspaceActionService.hasWorkspaceActive()) {
+            <div class="workspace-header-actions">
+                <button type="button" class="btn btn--ghost btn--small"
+                    (click)="workspaceActionService.requestRunSamples()"
+                    [disabled]="workspaceActionService.isRunningSamples()">
+                    {{ workspaceActionService.isRunningSamples() ? 'Running...' : 'Run' }}
                 </button>
-                <button (click)="themeService.setDarkTheme()" title="Dark Mode"
-                    [ngClass]="{'bg-bg-dark text-white shadow-sm': themeService.currentTheme() === 'dark', 'text-text-secondary-light dark:text-text-secondary-dark hover:text-primary-light dark:hover:text-primary-dark': themeService.currentTheme() !== 'dark'}"
-                    class="p-1.5 rounded-md transition-all duration-200">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
-                    </svg>
-                </button>
-                <button (click)="themeService.setSystemTheme()" title="System theme"
-                    [ngClass]="{'bg-white dark:bg-bg-dark text-primary-light dark:text-white shadow-sm': themeService.currentTheme() === 'system', 'text-text-secondary-light dark:text-text-secondary-dark hover:text-primary-light dark:hover:text-primary-dark': themeService.currentTheme() !== 'system'}"
-                    class="p-1.5 rounded-md transition-all duration-200">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd"
-                            d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm2-2a1 1 0 00-1 1v8a1 1 0 001 1h10a1 1 0 001-1V5a1 1 0 00-1-1H5z"
-                            clip-rule="evenodd" />
-                        <path d="M3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" />
-                    </svg>
+                <button type="button" class="btn btn--primary btn--small"
+                    (click)="workspaceActionService.requestSubmit()"
+                    [disabled]="workspaceActionService.isSubmitting()">
+                    {{ workspaceActionService.isSubmitting() ? 'Submitting...' : 'Submit' }}
                 </button>
             </div>
+            }
+        </div>
 
-            @if (authService.isLoggedIn$()) {
-            <button (click)="authService.logout()"
-                class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-5 rounded-lg transition duration-200 shadow-md hover:shadow-lg">
-                Logout
-            </button>
+        <div class="header__actions">
+            @if (authService.currentUser$(); as user) {
+            <div class="user-menu-container">
+                <button type="button" class="header__user-avatar-btn" (click)="toggleMenu($event)">
+                    @if (user.profilePictureUrl) {
+                    <img [src]="user.profilePictureUrl" alt="Avatar" class="header__user-avatar" />
+                    } @else {
+                    <span class="header__user-badge">{{ user.username.slice(0, 1).toUpperCase() }}</span>
+                    }
+                </button>
+
+                @if (isMenuOpen) {
+                <div class="user-menu glass-panel">
+                    <a routerLink="/profile" class="user-menu__profile-link" (click)="isMenuOpen = false">
+                        @if (user.profilePictureUrl) {
+                        <img [src]="user.profilePictureUrl" alt="Avatar" class="user-menu__avatar" />
+                        } @else {
+                        <span class="user-menu__badge">{{ user.username.slice(0, 1).toUpperCase() }}</span>
+                        }
+                        <div class="user-menu__info">
+                            <span class="user-menu__name">{{ user.username }}</span>
+                            <span class="user-menu__subtext">View Profile</span>
+                        </div>
+                    </a>
+                    <div class="user-menu__divider"></div>
+                    <a routerLink="/settings" class="user-menu__item" (click)="isMenuOpen = false">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
+                        Account Settings
+                    </a>
+                    @if (authService.isAdmin$()) {
+                    <a routerLink="/admin" class="user-menu__item user-menu__item--admin" (click)="isMenuOpen = false">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                        </svg>
+                        Admin Panel
+                    </a>
+                    }
+                    <div class="user-menu__divider"></div>
+
+                    <div class="user-menu__theme-section">
+                        <span class="user-menu__theme-label">Theme</span>
+                        <div class="theme-switch">
+                            <button type="button" class="theme-switch__button"
+                                [class.theme-switch__button--active]="themeService.currentTheme() === 'light'"
+                                (click)="themeService.setLightTheme()">
+                                Light
+                            </button>
+                            <button type="button" class="theme-switch__button"
+                                [class.theme-switch__button--active]="themeService.currentTheme() === 'dark'"
+                                (click)="themeService.setDarkTheme()">
+                                Dark
+                            </button>
+                            <button type="button" class="theme-switch__button"
+                                [class.theme-switch__button--active]="themeService.currentTheme() === 'black'"
+                                (click)="themeService.setBlackTheme()">
+                                Black
+                            </button>
+                            <button type="button" class="theme-switch__button"
+                                [class.theme-switch__button--active]="themeService.currentTheme() === 'system'"
+                                (click)="themeService.setSystemTheme()">
+                                System
+                            </button>
+                        </div>
+                    </div>
+                    <div class="user-menu__divider"></div>
+                    <button type="button" class="user-menu__logout-btn" (click)="logout(); isMenuOpen = false">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                            <polyline points="16 17 21 12 16 7"></polyline>
+                            <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                        Log out
+                    </button>
+                </div>
+                }
+            </div>
             } @else {
-            <button [routerLink]="['/login']"
-                class="bg-primary-light hover:bg-primary-hover-light dark:bg-primary-dark dark:hover:bg-primary-hover-dark text-white font-semibold py-2 px-5 rounded-lg transition duration-200 shadow-md hover:shadow-lg">
-                Login
-            </button>
+            <a routerLink="/login" class="btn btn--ghost">Login</a>
+            <a routerLink="/register" class="btn btn--primary">Create account</a>
             }
         </div>
     </nav>

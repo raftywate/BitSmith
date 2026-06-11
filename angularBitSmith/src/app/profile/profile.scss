@@ -1,0 +1,336 @@
+.profile-page {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.profile-page__top {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.52fr) minmax(0, 1fr);
+  gap: 1.2rem;
+  align-items: start;
+}
+
+.profile-card,
+.profile-editor,
+.profile-stats,
+.accepted-problems {
+  padding: 1.5rem;
+}
+
+.profile-card {
+  position: sticky;
+  top: 6rem;
+  height: fit-content;
+}
+
+.profile-card__avatar-wrap {
+  position: relative;
+  width: fit-content;
+  margin-bottom: 1rem;
+}
+
+.profile-card__avatar-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 1rem;
+}
+
+.profile-card__avatar-button:hover .profile-card__avatar {
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.profile-card__avatar {
+  width: 5.4rem;
+  height: 5.4rem;
+  object-fit: cover;
+  border-radius: 1rem;
+}
+
+.profile-card__avatar.avatar-fallback {
+  width: 5.4rem;
+  height: 5.4rem;
+  font-size: 1.25rem;
+}
+
+.avatar-menu {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  left: 0;
+  z-index: 5;
+  display: grid;
+  width: 11rem;
+  padding: 0.4rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface-3);
+  box-shadow: var(--shadow-soft);
+}
+
+.avatar-menu__item {
+  border: 0;
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.65rem;
+  background: transparent;
+  color: var(--text-strong);
+  text-align: left;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.avatar-menu__item:hover {
+  background: var(--surface-2);
+}
+
+.avatar-menu__item--danger {
+  color: var(--status-hard);
+}
+
+.avatar-menu__item input {
+  display: none;
+}
+
+.profile-card h1,
+.profile-editor__header h2,
+.profile-stats__header h2,
+.accepted-problems__header h2 {
+  margin: 0.5rem 0 0;
+  color: var(--text-strong);
+}
+
+.profile-card__username,
+.profile-card__bio,
+.profile-card__meta,
+.profile-editor__header p,
+.profile-stats__grid span,
+.accepted-problems__header span,
+.accepted-problem__number,
+.accepted-problem__date {
+  color: var(--text-muted);
+}
+
+.edit-capsule {
+  display: inline-flex;
+  width: fit-content;
+  margin: 0.25rem 0 0.8rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 0.42rem 0.75rem;
+  background: var(--surface-2);
+  color: var(--text-strong);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.profile-editor__form {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.profile-editor--summary {
+  min-height: 13rem;
+}
+
+.profile-editor__actions,
+.profile-stats__header,
+.accepted-problems__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.profile-editor__save {
+  min-width: 10rem;
+  color: #ffffff;
+  white-space: nowrap;
+  padding-inline: 1.4rem;
+}
+
+.profile-editor__save::after {
+  content: none;
+}
+
+.profile-stats {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.profile-stats__header strong {
+  color: var(--accent-strong);
+}
+
+.profile-stats__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.profile-stats__grid article {
+  display: grid;
+  gap: 0.4rem;
+  padding: 1rem;
+  border-radius: 0.9rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface-2);
+}
+
+.profile-stats__grid strong {
+  color: var(--text-strong);
+  font-size: 1.75rem;
+}
+
+.heatmap {
+  display: grid;
+  grid-template-rows: repeat(7, minmax(0.9rem, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0.9rem, 1fr);
+  gap: 0.25rem;
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+}
+
+.heatmap__day {
+  aspect-ratio: 1;
+  min-width: 0.9rem;
+  border-radius: 0.22rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border-color);
+}
+
+.heatmap__day[data-level='2'] {
+  background: color-mix(in srgb, var(--accent) 35%, var(--surface-2));
+}
+
+.heatmap__day[data-level='3'] {
+  background: color-mix(in srgb, var(--accent) 65%, var(--surface-2));
+}
+
+.heatmap__day[data-level='4'] {
+  background: var(--accent-strong);
+}
+
+.accepted-problems {
+  display: grid;
+  gap: 1rem;
+}
+
+.accepted-problems__list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.accepted-problem {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr) auto auto;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.85rem;
+  background: var(--surface-2);
+}
+
+.accepted-problem strong {
+  color: var(--text-strong);
+}
+
+.profile-page__loading {
+  padding: 1.6rem;
+  text-align: center;
+}
+
+.avatar-editor {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.avatar-editor__dialog {
+  width: min(42rem, 100%);
+  display: grid;
+  gap: 1rem;
+  padding: 1.4rem;
+}
+
+.avatar-editor__dialog h2 {
+  margin: 0.5rem 0 0;
+  color: var(--text-strong);
+}
+
+.avatar-editor__preview {
+  position: relative;
+  width: min(22rem, 78vw);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 1.4rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface-2);
+}
+
+.avatar-editor__preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform-origin: center;
+}
+
+.avatar-editor__controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.avatar-editor__controls input[type='range'] {
+  width: 100%;
+}
+
+.avatar-editor__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+@media (max-width: 920px) {
+  .profile-page__top {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-card {
+    position: static;
+  }
+
+  .profile-stats__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .accepted-problem {
+    grid-template-columns: 4rem minmax(0, 1fr);
+  }
+
+  .accepted-problem .difficulty-chip,
+  .accepted-problem__date {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 560px) {
+  .profile-stats__header,
+  .profile-editor__actions,
+  .accepted-problems__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .avatar-editor__controls {
+    grid-template-columns: 1fr;
+  }
+}

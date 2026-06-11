@@ -16,5 +16,8 @@ namespace dotnetBitSmith.Models.Auth {
         [Required]
         [Compare(nameof(Password), ErrorMessage = "Passwords do not match.")]
         public string ConfirmPassword { get; set; }
+
+        // Optional: if this matches the server-side secret, user gets Admin role
+        public string? InviteCode { get; set; }
     }
-}
+}

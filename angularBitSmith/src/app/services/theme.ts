@@ -1,101 +1,80 @@
-import { Injectable, signal } from '@angular/core';
+import { computed, effect, Injectable, signal } from '@angular/core';
 
-// Define the possible theme states
-type Theme = 'light' | 'dark' | 'system';
+export type ThemePreference = 'light' | 'dark' | 'black' | 'system';
+export type ResolvedTheme = 'light' | 'dark' | 'black';
 
 @Injectable({
   providedIn: 'root'
 })
 export class ThemeService {
+  private readonly storageKey = 'compylr.theme';
+  private readonly mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
-  // Create a signal to hold the current theme state
-  // We initialize it by loading the user's saved preference
-  currentTheme = signal<Theme>(this.loadTheme());
+  readonly currentTheme = signal<ThemePreference>(this.loadThemePreference());
+  readonly resolvedTheme = signal<ResolvedTheme>(this.resolveTheme(this.currentTheme()));
+  readonly isDark = computed(() => this.resolvedTheme() === 'dark' || this.resolvedTheme() === 'black');
 
   constructor() {
-    // When the service is created, apply the theme immediately
-    this.applyTheme(this.currentTheme());
+    effect(() => {
+      const preference = this.currentTheme();
+      const resolved = this.resolveTheme(preference);
 
-    // Also, listen for *changes* to the system's theme
-    // (e.g., if their OS changes from light to dark at 8 PM)
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      this.resolvedTheme.set(resolved);
+      localStorage.setItem(this.storageKey, preference);
+      document.documentElement.dataset['theme'] = resolved;
+      document.documentElement.style.colorScheme = resolved === 'light' ? 'light' : 'dark';
+    });
+
+    this.mediaQuery.addEventListener('change', () => {
       if (this.currentTheme() === 'system') {
-        this.applySystemTheme();
+        this.resolvedTheme.set(this.resolveTheme('system'));
+        document.documentElement.dataset['theme'] = this.resolvedTheme();
+        document.documentElement.style.colorScheme = this.resolvedTheme() === 'light' ? 'light' : 'dark';
       }
     });
   }
 
-  /**
-   * Loads the saved theme from localStorage, defaulting to 'system'
-   */
-  private loadTheme(): Theme {
-    const savedTheme = localStorage.getItem('theme') as Theme | null;
-    return savedTheme || 'system';
+  setTheme(theme: ThemePreference) {
+    this.currentTheme.set(theme);
   }
 
-  /**
-   * Saves the user's choice to localStorage
-   */
-  private saveTheme(theme: Theme) {
-    localStorage.setItem('theme', theme);
-  }
-
-  /**
-   * The main logic: applies the correct class to the <html> tag
-   */
-  private applyTheme(theme: Theme) {
-    if (theme === 'system') {
-      this.applySystemTheme();
+  toggleTheme() {
+    const current = this.resolvedTheme();
+    if (current === 'light') {
+      this.setTheme('dark');
+    } else if (current === 'dark') {
+      this.setTheme('black');
     } else {
-      this.setDarkClass(theme === 'dark');
+      this.setTheme('light');
     }
   }
 
-  /**
-   * Checks the browser's (prefers-color-scheme) media query
-   */
-  private applySystemTheme() {
-    const isSystemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    this.setDarkClass(isSystemDark);
-  }
-
-  /**
-   * The "workhorse" function that actually adds/removes the 'dark' class
-   */
-  private setDarkClass(isDark: boolean) {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }
-
-  // --- PUBLIC METHODS FOR COMPONENTS ---
-
-  /**
-   * Sets the theme to 'dark', saves it, and applies it.
-   */
-  setDarkTheme() {
-    this.currentTheme.set('dark');
-    this.saveTheme('dark');
-    this.applyTheme('dark');
-  }
-
-  /**
-   * Sets the theme to 'light', saves it, and applies it.
-   */
   setLightTheme() {
-    this.currentTheme.set('light');
-    this.saveTheme('light');
-    this.applyTheme('light');
+    this.setTheme('light');
   }
 
-  /**
-   * Sets the theme to 'system', saves it, and applies it.
-   */
+  setDarkTheme() {
+    this.setTheme('dark');
+  }
+
+  setBlackTheme() {
+    this.setTheme('black');
+  }
+
   setSystemTheme() {
-    this.currentTheme.set('system');
-    this.saveTheme('system');
-    this.applyTheme('system');
+    this.setTheme('system');
+  }
+
+  private loadThemePreference(): ThemePreference {
+    const storedTheme = localStorage.getItem(this.storageKey) as ThemePreference | null;
+    return storedTheme ?? 'system';
+  }
+
+  private resolveTheme(preference: ThemePreference): ResolvedTheme {
+    if (preference === 'system') {
+      return this.mediaQuery.matches ? 'dark' : 'light';
+    }
+
+    return preference;
   }
 }

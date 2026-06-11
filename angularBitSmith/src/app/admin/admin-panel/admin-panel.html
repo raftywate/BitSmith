@@ -1,0 +1,473 @@
+<section class="admin-page">
+  <div class="admin-page__header glass-panel">
+    <div>
+      <span class="eyebrow">Admin Console</span>
+      <h1>Problem Management</h1>
+      <p>Create new challenges, define test cases, and publish content to the platform.</p>
+    </div>
+    <a routerLink="/problems" class="btn btn--ghost">← Back to Problems</a>
+  </div>
+
+  <div class="admin-card admin-card--compact panel">
+    <div class="admin-card__head-row">
+      <div class="admin-card__head">
+        <h2>{{ isEditMode ? 'Editing Existing Problem' : 'Edit Existing Problem' }}</h2>
+        <p>Search a published problem and load it into this editor, or continue below to create a new one.</p>
+      </div>
+      @if (isEditMode) {
+      <button type="button" class="btn btn--ghost" (click)="cancelEdit()">Cancel Edit Mode</button>
+      }
+    </div>
+
+    <div class="edit-problem-picker">
+      <input class="input" type="search" [value]="problemSearch()" (input)="onSearchInput($any($event.target).value)"
+        placeholder="Search by title or problem number" />
+      <button type="button" class="btn btn--subtle" (click)="searchExistingProblems()" [disabled]="isLoadingExistingProblems()">
+        {{ isLoadingExistingProblems() ? 'Searching...' : 'Search' }}
+      </button>
+    </div>
+
+    <div class="edit-problem-list">
+      @for (problem of existingProblems(); track problem.id) {
+      <button type="button" class="edit-problem-item" [class.edit-problem-item--active]="editingProblemId() === problem.id"
+        (click)="loadProblemForEdit(problem.id)" [disabled]="isLoadingEditProblem()">
+        <span>#{{ problem.problemNumber }} · {{ problem.title }}</span>
+        <span [class.difficulty-text--easy]="problem.difficulty === 'Easy'"
+              [class.difficulty-text--medium]="problem.difficulty === 'Medium'"
+              [class.difficulty-text--hard]="problem.difficulty === 'Hard'">
+          {{ problem.difficulty }}
+        </span>
+      </button>
+      }
+      @if (!existingProblems().length && !isLoadingExistingProblems()) {
+      <p class="field__hint">No problems found for this search.</p>
+      }
+    </div>
+  </div>
+
+  <!-- Step Indicator -->
+  <div class="admin-steps">
+    <div class="admin-step" [class.admin-step--active]="activeStep() === 'problem'" [class.admin-step--done]="activeStep() === 'testcases' || activeStep() === 'done'">
+      <div class="admin-step__circle">
+        @if (activeStep() === 'testcases' || activeStep() === 'done') {
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        } @else { 1 }
+      </div>
+      <span>Problem Details</span>
+    </div>
+    <div class="admin-step__connector"></div>
+    <div class="admin-step" [class.admin-step--active]="activeStep() === 'testcases'" [class.admin-step--done]="activeStep() === 'done'">
+      <div class="admin-step__circle">
+        @if (activeStep() === 'done') {
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        } @else { 2 }
+      </div>
+      <span>Test Cases</span>
+    </div>
+    <div class="admin-step__connector"></div>
+    <div class="admin-step" [class.admin-step--active]="activeStep() === 'done'">
+      <div class="admin-step__circle">3</div>
+      <span>Done</span>
+    </div>
+  </div>
+
+  <!-- ─── Step 1: Problem Details ─── -->
+  @if (activeStep() === 'problem') {
+  <div class="admin-card panel">
+    <div class="admin-card__head">
+      <h2>Problem Details</h2>
+      <p>{{ isEditMode ? 'Update the problem metadata, hints, categories, and starter code.' : 'Fill in the problem metadata. Markdown is supported in the description.' }}</p>
+    </div>
+
+    <form [formGroup]="problemForm" (ngSubmit)="onSubmitProblem()" class="admin-form">
+
+      <label class="field">
+        <span class="field__label">Title <span class="field__required">*</span></span>
+        <input class="input" type="text" formControlName="title" placeholder="e.g. Two Sum" />
+        @if (problemForm.get('title')?.invalid && problemForm.get('title')?.touched) {
+          <p class="field__error">Title must be between 5 and 100 characters.</p>
+        }
+      </label>
+
+      <div class="field" style="margin-bottom: 1.5rem;">
+        <label class="checkbox-label" style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none;">
+          <input type="checkbox" formControlName="hasHints" style="cursor: pointer; width: 1.1rem; height: 1.1rem; accent-color: var(--accent);" />
+          <span style="font-weight: 600; color: var(--text-strong);">Include hints for this problem</span>
+        </label>
+      </div>
+
+      @if (problemForm.get('hasHints')?.value) {
+      <div class="field" formArrayName="hints">
+        <div class="field-row">
+          <div>
+            <span class="field__label">Hints</span>
+            <span class="field__hint">Optional. Add as many progressive hints as this problem needs.</span>
+          </div>
+          <button type="button" class="btn btn--ghost btn--small" (click)="addHint()">+ Add hint</button>
+        </div>
+        <div class="hint-list">
+          @for (hint of hintsArray.controls; track $index) {
+          <div class="hint-row">
+            <textarea class="input textarea textarea--small" [formControlName]="$index" rows="2"
+              placeholder="Give a nudge without revealing the full solution."></textarea>
+            <button type="button" class="btn btn--ghost btn--small" (click)="removeHint($index)">Remove</button>
+          </div>
+          }
+        </div>
+      </div>
+      }
+
+      <label class="field">
+        <span class="field__label">Difficulty <span class="field__required">*</span></span>
+        <div class="difficulty-selector">
+          @for (d of difficulties; track d) {
+          <button type="button" class="difficulty-btn"
+            [class.difficulty-btn--easy]="d === 'Easy'"
+            [class.difficulty-btn--medium]="d === 'Medium'"
+            [class.difficulty-btn--hard]="d === 'Hard'"
+            [class.difficulty-btn--active]="problemForm.get('difficulty')?.value === d"
+            (click)="problemForm.get('difficulty')?.setValue(d)">
+            {{ d }}
+          </button>
+          }
+        </div>
+      </label>
+
+      <!-- Collapsible Categories -->
+      <div class="field">
+        <button type="button" class="collapsible-toggle" (click)="categoriesOpen.set(!categoriesOpen())">
+          <svg class="collapsible-toggle__arrow" [class.collapsible-toggle__arrow--open]="categoriesOpen()"
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+          <span class="field__label" style="margin:0">Topics / Categories</span>
+          @if (selectedCategories().length) {
+          <span class="collapsible-toggle__badge">{{ selectedCategories().length }} selected</span>
+          }
+        </button>
+
+        @if (!categoriesOpen() && selectedCategories().length) {
+        <div class="selected-preview">
+          @for (name of selectedCategoryNames; track name) {
+          <span class="category-chip category-chip--selected">{{ name }}</span>
+          }
+        </div>
+        }
+
+        @if (categoriesOpen()) {
+        <div class="category-grid">
+          @for (cat of categories(); track cat.id) {
+          <button type="button" class="category-chip"
+            [class.category-chip--selected]="isCategorySelected(cat.id)"
+            (click)="toggleCategory(cat.id)">
+            {{ cat.name }}
+          </button>
+          }
+          @if (!categories().length) {
+            <span class="field__hint">Loading categories...</span>
+          }
+        </div>
+        }
+      </div>
+
+      <label class="field">
+        <span class="field__label">Description <span class="field__required">*</span></span>
+        <span class="field__hint">Supports Markdown, safe HTML, and LaTeX math. Use the toolbar for common formatting like superscript, subscript, formulas, lists, and code blocks.</span>
+        <div class="description-editor">
+          <div class="description-toolbar" aria-label="Description formatting toolbar">
+            <button type="button" class="description-toolbar__btn" (click)="insertDescriptionSnippet('**{{text}}**')">Bold</button>
+            <button type="button" class="description-toolbar__btn" (click)="insertDescriptionSnippet('*{{text}}*')">Italic</button>
+            <button type="button" class="description-toolbar__btn" (click)="insertDescriptionSnippet('<u>{{text}}</u>', 'underlined')">Underline</button>
+            <button type="button" class="description-toolbar__btn" (click)="insertDescriptionSnippet('~~{{text}}~~', 'strikethrough')">Strike</button>
+            <button type="button" class="description-toolbar__btn" (click)="insertDescriptionSnippet('`{{text}}`', 'code')">Code</button>
+            <button type="button" class="description-toolbar__btn" (click)="insertDescriptionSnippet('<sup>{{text}}</sup>', '2')">Sup</button>
+            <button type="button" class="description-toolbar__btn" (click)="insertDescriptionSnippet('<sub>{{text}}</sub>', 'i')">Sub</button>
+            <button type="button" class="description-toolbar__btn" (click)="insertDescriptionSnippet('$' + '{{text}}' + '$', 'n^2')">Inline Math</button>
+            <button type="button" class="description-toolbar__btn" (click)="insertDescriptionSnippet('$$\\sum_{i=1}^{n} i$$', 'formula')">Block Math</button>
+            <button type="button" class="description-toolbar__btn" (click)="insertDescriptionSnippet('\n- {{text}}\n', 'List item')">List</button>
+            <button type="button" class="description-toolbar__btn" (click)="insertDescriptionSnippet('\n```text\n{{text}}\n```\n', 'sample input')">Block Code</button>
+            <button type="button" class="description-toolbar__btn" (click)="insertDescriptionSnippet('\n> {{text}}\n', 'Quoted text')">Quote</button>
+            <button type="button" class="description-toolbar__btn description-toolbar__btn--ghost" (click)="descriptionPreviewOpen.set(!descriptionPreviewOpen())">
+              {{ descriptionPreviewOpen() ? 'Hide Preview' : 'Show Preview' }}
+            </button>
+          </div>
+
+          <div class="description-editor__grid" [class.description-editor__grid--single]="!descriptionPreviewOpen()">
+            <textarea #descriptionInput class="input textarea description-editor__textarea" formControlName="description" rows="14" placeholder="## Problem Statement&#10;&#10;Given an integer n, return n&lt;sup&gt;2&lt;/sup&gt;.&#10;&#10;For math, write $O(n \\log n)$ or:&#10;&#10;$$\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}$$" (keydown)="onDescriptionKeyDown($event)"></textarea>
+            @if (descriptionPreviewOpen()) {
+            <div class="description-preview panel">
+              <div class="description-preview__label">Live Preview</div>
+              @if (problemForm.get('description')?.value) {
+              <div class="workspace-copy description-preview__body" [innerHTML]="problemForm.get('description')?.value | mdRender"></div>
+              } @else {
+              <p class="description-preview__empty">Your formatted problem statement will appear here.</p>
+              }
+            </div>
+            }
+          </div>
+        </div>
+        @if (problemForm.get('description')?.invalid && problemForm.get('description')?.touched) {
+          <p class="field__error">Description is required (minimum 10 characters).</p>
+        }
+      </label>
+
+      <div class="field">
+        <span class="field__label">Starter Code Templates</span>
+        <span class="field__hint">Optional. Provide starter code skeletons for each supported language. Users will see these when starting their attempt.</span>
+        
+        <!-- Language Tabs -->
+        <div class="starter-code-tabs">
+          @for (lang of starterLanguages; track lang.value) {
+          <button type="button" class="starter-code-tab" 
+            [class.starter-code-tab--active]="activeStarterLang() === lang.value"
+            (click)="activeStarterLang.set(lang.value)">
+            {{ lang.label }}
+            @if (hasStarterCode(lang.value)) {
+              <span class="starter-code-tab__indicator"></span>
+            }
+          </button>
+          }
+        </div>
+
+        <!-- Textarea container with formGroupName -->
+        <div formGroupName="starterCode" class="starter-code-editor">
+          @if (activeStarterLang() === 'csharp') {
+            <textarea class="input textarea textarea--mono textarea--code" formControlName="csharp" rows="8" placeholder="public class Solution&#10;{&#10;    public void Solve()&#10;    {&#10;        &#10;    }&#10;}"></textarea>
+          }
+          @if (activeStarterLang() === 'python') {
+            <textarea class="input textarea textarea--mono textarea--code" formControlName="python" rows="8" placeholder="class Solution:&#10;    def solve(self):&#10;        pass"></textarea>
+          }
+          @if (activeStarterLang() === 'java') {
+            <textarea class="input textarea textarea--mono textarea--code" formControlName="java" rows="8" placeholder="class Solution {&#10;    public void solve() {&#10;        &#10;    }&#10;}"></textarea>
+          }
+          @if (activeStarterLang() === 'cpp') {
+            <textarea class="input textarea textarea--mono textarea--code" formControlName="cpp" rows="8" placeholder="#include &lt;bits/stdc++.h&gt;&#10;using namespace std;&#10;&#10;class Solution {&#10;public:&#10;    void solve() {&#10;        &#10;    }&#10;};"></textarea>
+          }
+          @if (activeStarterLang() === 'c') {
+            <textarea class="input textarea textarea--mono textarea--code" formControlName="c" rows="8" placeholder="#include &lt;stdio.h&gt;&#10;&#10;void solve(void) {&#10;    &#10;}"></textarea>
+          }
+        </div>
+      </div>
+
+      <div class="admin-form__footer">
+        <button type="submit" class="btn btn--primary" [disabled]="isSubmitting()">
+          @if (isSubmitting()) {
+            <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10" stroke-opacity=".25"/><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/></svg>
+            Creating Problem...
+          } @else {
+            {{ isEditMode ? 'Update Problem & Continue →' : 'Create Problem & Continue →' }}
+          }
+        </button>
+      </div>
+    </form>
+  </div>
+  }
+
+  <!-- ─── Step 2: Test Cases ─── -->
+  @if (activeStep() === 'testcases') {
+  <div class="admin-card panel">
+    <div class="admin-card__head">
+      <div class="admin-card__head-row">
+        <div>
+          <h2>Test Cases</h2>
+          <p>Add sample and hidden test cases. Hidden test cases evaluate submissions but are never shown to users.</p>
+        </div>
+
+        <!-- Upload mode toggle -->
+        <div class="upload-mode-toggle">
+          <button type="button" class="upload-mode-btn" [class.upload-mode-btn--active]="uploadMode() === 'manual'" (click)="uploadMode.set('manual')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Manual
+          </button>
+          <button type="button" class="upload-mode-btn" [class.upload-mode-btn--active]="uploadMode() === 'file'" (click)="uploadMode.set('file')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Upload File
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual Mode -->
+    @if (uploadMode() === 'manual') {
+    <form [formGroup]="testCasesForm" (ngSubmit)="onSubmitTestCases()" class="admin-form">
+
+      <!-- Sample Test Cases -->
+      <div class="testcase-section">
+        <div class="testcase-section__header">
+          <div class="testcase-section__title">
+            <div class="testcase-section__dot testcase-section__dot--sample"></div>
+            Sample Test Cases
+            <span class="testcase-section__count">{{ sampleCases.length }}</span>
+          </div>
+          <span class="testcase-section__desc">Shown to users in the problem statement.</span>
+          <button type="button" class="btn btn--ghost btn--small" (click)="addSampleCase()">+ Add sample</button>
+        </div>
+
+        <div class="testcase-list" formArrayName="testCases">
+          @for (item of sampleCaseIndices; track item.index) {
+          <div class="testcase-card testcase-card--sample panel" [formGroupName]="item.index">
+            <div class="testcase-card__header">
+              <span class="testcase-card__label">Sample {{ $index + 1 }}</span>
+              <button type="button" class="btn btn--ghost btn--small" (click)="removeTestCase(item.index)" title="Remove">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+              </button>
+            </div>
+            <div class="testcase-card__fields">
+              <label class="field">
+                <span class="field__label">Raw Input</span>
+                <textarea class="input textarea textarea--mono textarea--small" formControlName="input" rows="3" placeholder="[2,7,11,15]&#10;9"></textarea>
+              </label>
+              <label class="field">
+                <span class="field__label">Input Labels</span>
+                <span class="field__hint">One label per input line. Example: <code>nums</code>, <code>target</code>, <code>cost</code>.</span>
+                <textarea class="input textarea textarea--small" formControlName="inputLabelsText" rows="3" placeholder="nums&#10;target"></textarea>
+              </label>
+              <label class="field">
+                <span class="field__label">Expected Output</span>
+                <textarea class="input textarea textarea--mono textarea--small" formControlName="expectedOutput" rows="3" placeholder="[0,1]"></textarea>
+              </label>
+            </div>
+          </div>
+          }
+          @if (!sampleCases.length) {
+          <p class="testcase-empty">No sample test cases yet. These will be visible to users.</p>
+          }
+        </div>
+      </div>
+
+      <!-- Hidden Test Cases -->
+      <div class="testcase-section">
+        <div class="testcase-section__header">
+          <div class="testcase-section__title">
+            <div class="testcase-section__dot testcase-section__dot--hidden"></div>
+            Hidden Test Cases
+            <span class="testcase-section__count">{{ hiddenCases.length }}</span>
+          </div>
+          <span class="testcase-section__desc">Used to judge submissions. Never shown to users.</span>
+          <button type="button" class="btn btn--ghost btn--small" (click)="addHiddenCase()">+ Add hidden</button>
+        </div>
+
+        <div class="testcase-list" formArrayName="testCases">
+          @for (item of hiddenCaseIndices; track item.index) {
+          <div class="testcase-card testcase-card--hidden panel" [formGroupName]="item.index">
+            <div class="testcase-card__header">
+              <span class="testcase-card__label">Hidden {{ $index + 1 }}</span>
+              <button type="button" class="btn btn--ghost btn--small" (click)="removeTestCase(item.index)" title="Remove">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+              </button>
+            </div>
+            <div class="testcase-card__fields">
+              <label class="field">
+                <span class="field__label">Raw Input</span>
+                <textarea class="input textarea textarea--mono textarea--small" formControlName="input" rows="3" placeholder="[3,2,4]&#10;6"></textarea>
+              </label>
+              <label class="field">
+                <span class="field__label">Input Labels</span>
+                <span class="field__hint">One label per input line. Hidden labels help admins keep cases readable.</span>
+                <textarea class="input textarea textarea--small" formControlName="inputLabelsText" rows="3" placeholder="nums&#10;target"></textarea>
+              </label>
+              <label class="field">
+                <span class="field__label">Expected Output</span>
+                <textarea class="input textarea textarea--mono textarea--small" formControlName="expectedOutput" rows="3" placeholder="[1,2]"></textarea>
+              </label>
+            </div>
+          </div>
+          }
+          @if (!hiddenCases.length) {
+          <p class="testcase-empty testcase-empty--hint">No hidden test cases yet. Or use <strong>Upload File</strong> mode to bulk-import hundreds at once.</p>
+          }
+        </div>
+      </div>
+
+      <div class="admin-form__footer">
+        <button type="button" class="btn btn--ghost" (click)="skipTestCases()">Skip for now</button>
+        <button type="submit" class="btn btn--primary" [disabled]="isAddingTestCases()">
+          @if (isAddingTestCases()) {
+            <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10" stroke-opacity=".25"/><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/></svg>
+            Saving...
+          } @else {
+            {{ isEditMode ? 'Update Test Cases →' : 'Save Test Cases →' }}
+          }
+        </button>
+      </div>
+    </form>
+    }
+
+    <!-- File Upload Mode -->
+    @if (uploadMode() === 'file') {
+    <div class="upload-section">
+      <div class="upload-format-info panel">
+        <h3>Accepted File Formats</h3>
+        <div class="upload-format-grid">
+          <div class="upload-format">
+            <span class="upload-format__ext">.csv</span>
+            <code class="upload-format__sample">isHidden,input,expectedOutput,inputLabels
+true,"[2,7,11,15]\n9","[0,1]","nums|target"
+false,"[3,2,4]\n6","[1,2]","nums|target"</code>
+            <p>First row is the header. Optional fourth column: labels separated by <code>|</code>, such as <code>nums|target|cost</code>.</p>
+          </div>
+          <div class="upload-format">
+            <span class="upload-format__ext">.json</span>
+            <code class="upload-format__sample">[
+  &#123;"isHidden":true,"input":"[2,7]\n9","inputLabels":["nums","target"],"expectedOutput":"[0,1]"&#125;
+]</code>
+            <p>Array of objects. <code>isHidden: true</code> for judging-only cases.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="file-drop-zone" [class.file-drop-zone--has-file]="!!selectedFile()">
+        <input #fileInput type="file" accept=".csv,.json" class="file-drop-zone__input" (change)="onFileSelected($event)" />
+        @if (!selectedFile()) {
+        <div class="file-drop-zone__prompt">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="36" height="36" style="color: var(--text-muted)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p>Click to select a <strong>.csv</strong> or <strong>.json</strong> file</p>
+          <span>Max 2 MB · File content is parsed server-side only</span>
+        </div>
+        } @else {
+        <div class="file-drop-zone__file">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" style="color: var(--accent)"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <span class="file-drop-zone__filename">{{ selectedFile()!.name }}</span>
+          <span class="file-drop-zone__size">{{ (selectedFile()!.size / 1024).toFixed(1) }} KB</span>
+          <button type="button" class="btn btn--ghost btn--small" (click)="clearFile()">Remove</button>
+        </div>
+        }
+      </div>
+
+      <div class="upload-security-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span>File is sent directly to the server as binary — expected outputs are never exposed in browser DevTools or JavaScript source.</span>
+      </div>
+
+      <div class="admin-form__footer">
+        <button type="button" class="btn btn--ghost" (click)="skipTestCases()">Skip for now</button>
+        <button type="button" class="btn btn--primary" (click)="onSubmitTestCases()" [disabled]="isUploadingFile() || !selectedFile()">
+          @if (isUploadingFile()) {
+            <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10" stroke-opacity=".25"/><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/></svg>
+            Uploading...
+          } @else {
+            Upload & Save →
+          }
+        </button>
+      </div>
+    </div>
+    }
+  </div>
+  }
+
+  <!-- ─── Step 3: Done ─── -->
+  @if (activeStep() === 'done') {
+  <div class="admin-card admin-card--done panel">
+    <div class="admin-done__icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="40" height="40"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+    </div>
+    <h2>{{ isEditMode ? 'Problem Updated!' : 'Problem Published!' }}</h2>
+    <p>{{ isEditMode ? 'The updated problem is now live on Compylr.' : 'The problem is now live on Compylr. Users can browse, solve, and submit their solutions.' }}</p>
+    <div class="admin-done__actions">
+      <button type="button" class="btn btn--primary" (click)="goToProblem()">View Problem →</button>
+      <button type="button" class="btn btn--ghost" (click)="createAnother()">Create Another Problem</button>
+    </div>
+  </div>
+  }
+</section>

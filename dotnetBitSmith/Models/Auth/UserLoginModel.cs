@@ -3,9 +3,9 @@ using System.ComponentModel.DataAnnotations;
 namespace dotnetBitSmith.Models.Auth {
     public class UserLoginModel {
         [Required]
-        [EmailAddress]
-        public string Email { get; set; }
+        public string EmailOrUsername { get; set; } = string.Empty;
+
         [Required]
-        public string Password { get; set; }
+        public string Password { get; set; } = string.Empty;
     }
 }

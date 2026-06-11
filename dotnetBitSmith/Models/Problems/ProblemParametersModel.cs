@@ -2,8 +2,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace dotnetBitSmith.Models.Problems {
     public class ProblemParametersModel {
-        const int MaxPageSize = 50; // Security: Prevent fetching 1 million rows
-        private int _pageSize = 10;
+        const int MaxPageSize = 100;
+        private int _pageSize = 50;
 
         public int PageNumber { get; set; } = 1;
 
@@ -11,5 +11,11 @@ namespace dotnetBitSmith.Models.Problems {
             get => _pageSize;
             set => _pageSize = (value > MaxPageSize) ? MaxPageSize : value;
         }
+
+        // Search by title (contains) or problem number (exact)
+        public string? Search { get; set; }
+
+        // Filter by one or more category IDs (comma-separated or repeated param)
+        public List<Guid>? CategoryIds { get; set; }
     }
-}
+}

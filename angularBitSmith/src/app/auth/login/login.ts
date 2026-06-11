@@ -1,11 +1,11 @@
-import { Component, inject, signal, effect } from '@angular/core';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { AuthServiceContract } from '../../services/auth.contract';
-import { Router, RouterModule } from '@angular/router';
-import { AuthResponse } from '../../models/auth-response';
-import { HttpErrorResponse } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, inject, signal } from '@angular/core';
+import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Router, RouterModule } from '@angular/router';
+import { AuthService } from '../../services/auth';
 import { ToastService } from '../../services/toast';
+import { getApiErrorMessage } from '../../utils/api-error';
 
 @Component({
   selector: 'app-login',
@@ -14,67 +14,57 @@ import { ToastService } from '../../services/toast';
   styleUrl: './login.scss',
 })
 export class Login {
-  //Dependency Injection
   private fb = inject(FormBuilder);
-  private authService = inject(AuthServiceContract);
+  private authService = inject(AuthService);
   private router = inject(Router);
   private toastService = inject(ToastService);
 
-  //State Management with Signals
   isLoading = signal(false);
   errorMessage = signal<string | null>(null);
+  redirectUrl = this.router.parseUrl(this.router.url).queryParams['redirect'] ?? '/problems';
 
-  //Reactive Form definition
-  loginForm : FormGroup = this.fb.group({
-    email: ['', [Validators.required, Validators.email]],
+  loginForm: FormGroup = this.fb.nonNullable.group({
+    emailOrUsername: ['', [Validators.required]],
     password: ['', Validators.required]
   });
 
-  get email() {return this.loginForm.get('email');}
-  get password() {return this.loginForm.get('password');}
-
-  constructor() {
-    //if the user is already logged in, redirect them to the home page
-    effect(() => {
-      if(this.authService.isLoggedIn$()) {
-        this.router.navigate(['/problems']);
-      }
-    });
+  get emailOrUsername() {
+    return this.loginForm.get('emailOrUsername');
   }
 
-  onSubmit() : void {
+  get password() {
+    return this.loginForm.get('password');
+  }
+
+  onSubmit(): void {
     this.errorMessage.set(null);
 
-    if(this.loginForm.invalid) {
+    if (this.loginForm.invalid) {
       this.loginForm.markAllAsTouched();
       return;
     }
 
     this.isLoading.set(true);
-    const {email, password} = this.loginForm.value;
+    const { emailOrUsername, password } = this.loginForm.getRawValue();
 
-    this.authService.login({email, password}).subscribe({
-      next : (response : AuthResponse) => {
-        this.toastService.success('Login successful!');
-        this.router.navigate(['/problems']);
+    this.authService.login({ emailOrUsername, password }).subscribe({
+      next: () => {
+        this.toastService.success('Welcome back to Compylr.');
+        void this.router.navigateByUrl(this.redirectUrl);
       },
-      error : (err : HttpErrorResponse) => {
+      error: (err: HttpErrorResponse) => {
         this.isLoading.set(false);
-        if(err.status == 401) {
-          this.errorMessage.set('Invalid email or password. Please try again.');
-          this.toastService.error('Invalid credentials');
-        } else if(err.status == 429) {
-          this.errorMessage.set('Too many login attempts. Please try again later.');
-          this.toastService.error('Too many attempts');
+        if (err.status === 429) {
+          this.errorMessage.set('Too many login attempts. Please wait a moment and try again.');
+          this.toastService.warning('Login rate limit reached.');
         } else {
-          this.errorMessage.set('An unexpected error occurred during login.');
-          this.toastService.error('Login failed');
+          const message = getApiErrorMessage(err, 'Unable to sign in right now.');
+          this.errorMessage.set(message);
+          this.toastService.error(message);
         }
-        console.error('Login Error: ', err);
+        console.error('Login error:', err);
       },
-      complete: () => {
-        this.isLoading.set(false);
-      }
+      complete: () => this.isLoading.set(false)
     });
   }
 }

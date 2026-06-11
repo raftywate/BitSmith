@@ -4,6 +4,7 @@ export interface Toast {
     id: number;
     message: string;
     type: 'success' | 'error' | 'info' | 'warning';
+    duration: number;
 }
 
 @Injectable({
@@ -13,16 +14,19 @@ export class ToastService {
     toasts = signal<Toast[]>([]);
     private counter = 0;
 
-    show(message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') {
+    show(
+        message: string,
+        type: 'success' | 'error' | 'info' | 'warning' = 'info',
+        duration = 4200
+    ) {
         const id = this.counter++;
-        const toast: Toast = { id, message, type };
+        const toast: Toast = { id, message, type, duration };
 
         this.toasts.update(current => [...current, toast]);
 
-        // Auto-remove after 3 seconds
         setTimeout(() => {
             this.remove(id);
-        }, 3000);
+        }, duration);
     }
 
     success(message: string) {

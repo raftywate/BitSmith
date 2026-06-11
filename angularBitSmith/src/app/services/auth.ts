@@ -10,11 +10,12 @@ import { environment } from '../../environments/environment';
   providedIn: 'root',
 })
 export class AuthService extends AuthServiceContract {
+  private readonly tokenStorageKey = 'compylr.token';
+  private readonly userStorageKey = 'compylr.user';
 
   private http = inject(HttpClient);
   private apiUrl = `${environment.apiUrl}/auth`;
 
-  // State using Signals
   private userSignal = signal<User | null>(this.getInitialUser());
 
   public readonly currentUser$: Signal<User | null> = this.userSignal.asReadonly();
@@ -24,37 +25,71 @@ export class AuthService extends AuthServiceContract {
   public readonly isAdmin$: Signal<boolean> = computed(() => this.userSignal()?.role === 'Admin');
 
   private getInitialUser(): User | null {
-    const token = localStorage.getItem('jwt_token');
-    const userJson = localStorage.getItem('current_user');
+    const token = localStorage.getItem(this.tokenStorageKey);
+    const userJson = localStorage.getItem(this.userStorageKey);
 
     if (token && userJson) {
+      if (this.isTokenExpired(token)) {
+        this.clearStoredAuth();
+        return null;
+      }
+
       try {
-        const userData = JSON.parse(userJson);
+        const userData = JSON.parse(userJson) as User;
         return {
-          id: userData.userId,
+          id: userData.id,
           username: userData.username,
-          role: userData.role
+          role: userData.role,
+          profilePictureUrl: userData.profilePictureUrl
         } as User;
       } catch (e) {
-        console.error("Failed to parse stored user data:", e);
+        console.error('Failed to parse stored user data:', e);
+        this.clearStoredAuth();
         return null;
       }
     }
+
     return null;
   }
 
   private saveAuthData(response: AuthResponse) {
-    localStorage.setItem('jwt_token', response.token);
+    localStorage.setItem(this.tokenStorageKey, response.token);
+
     const userData: User = {
       id: response.userId,
       username: response.username,
-      role: response.role
-    }
-    localStorage.setItem('current_user', JSON.stringify(userData));
+      role: response.role,
+      profilePictureUrl: response.profilePictureUrl
+    };
+
+    localStorage.setItem(this.userStorageKey, JSON.stringify(userData));
     this.userSignal.set(userData);
   }
 
-  // --- Abstract Methods Implementation ---
+  public updateCurrentUserProfilePicture(url: string | null) {
+    const current = this.userSignal();
+    if (current) {
+      const updated: User = {
+        ...current,
+        profilePictureUrl: url
+      };
+      localStorage.setItem(this.userStorageKey, JSON.stringify(updated));
+      this.userSignal.set(updated);
+    }
+  }
+
+  public updateCurrentUserDetails(username: string, profilePictureUrl: string | null) {
+    const current = this.userSignal();
+    if (current) {
+      const updated: User = {
+        ...current,
+        username: username,
+        profilePictureUrl: profilePictureUrl
+      };
+      localStorage.setItem(this.userStorageKey, JSON.stringify(updated));
+      this.userSignal.set(updated);
+    }
+  }
 
   login(credentials: any): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(`${this.apiUrl}/login`, credentials).pipe(
@@ -68,14 +103,55 @@ export class AuthService extends AuthServiceContract {
     );
   }
 
-  logout(): void {
-    localStorage.removeItem('jwt_token');
-    localStorage.removeItem('current_user');
+  logout(silent = false): void {
+    this.clearStoredAuth();
     this.userSignal.set(null);
+
+    if (!silent) {
+      console.info('Signed out of Compylr session.');
+    }
   }
 
   public getToken(): string | null {
-    return localStorage.getItem('jwt_token');
+    const token = localStorage.getItem(this.tokenStorageKey);
+
+    if (!token || this.isTokenExpired(token)) {
+      this.clearStoredAuth();
+      this.userSignal.set(null);
+      return null;
+    }
+
+    return token;
   }
 
+  private clearStoredAuth() {
+    localStorage.removeItem(this.tokenStorageKey);
+    localStorage.removeItem(this.userStorageKey);
+  }
+
+  private isTokenExpired(token: string): boolean {
+    try {
+      const payload = token.split('.')[1];
+      if (!payload) {
+        return true;
+      }
+
+      const normalizedPayload = payload
+        .replace(/-/g, '+')
+        .replace(/_/g, '/')
+        .padEnd(Math.ceil(payload.length / 4) * 4, '=');
+
+      const decoded = JSON.parse(atob(normalizedPayload)) as {
+        exp?: number;
+      };
+
+      if (!decoded.exp) {
+        return false;
+      }
+
+      return decoded.exp * 1000 <= Date.now();
+    } catch {
+      return true;
+    }
+  }
 }

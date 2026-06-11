@@ -1,8 +1,24 @@
-import { ProblemSummary } from './problem-summary';
+import { Category } from "./category";
+import { ProblemDifficulty } from "./problem-difficulty.enum";
 
-export interface ProblemDetail extends ProblemSummary {
-    description: string;
-    examples: string; // HTML or Markdown string
-    constraints: string; // HTML or Markdown string
-    starterCode: string;
+export interface SampleTestCase {
+  id: string;
+  input: string;
+  expectedOutput: string;
+  inputLabels: string[];
+  isHidden?: boolean;
+}
+
+export interface ProblemDetail {
+  id: string;
+  problemNumber: number;
+  title: string;
+  description: string;
+  difficulty: ProblemDifficulty;
+  starterCode: string | null;
+  hints: string[];
+  categories: Category[];
+  sampleTestCases: SampleTestCase[];
+  testCases?: SampleTestCase[];
+  authorName: string;
 }

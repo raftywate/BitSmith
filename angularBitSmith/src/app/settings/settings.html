@@ -1,0 +1,121 @@
+<div class="settings-shell container">
+  <div class="settings-card glass-panel">
+    <div class="settings-header">
+      <h1 class="settings-title">Account Settings</h1>
+      <p class="settings-subtitle">Manage your account credentials and security.</p>
+    </div>
+
+    @if (isLoading()) {
+    <div class="settings-loading">
+      <div class="spinner"></div>
+      <p>Loading your settings...</p>
+    </div>
+    } @else {
+    <form [formGroup]="settingsForm" (ngSubmit)="saveSettings()" class="settings-form">
+      @if (errorMessage()) {
+      <div class="error-state">
+        {{ errorMessage() }}
+      </div>
+      }
+
+      <div class="field">
+        <label for="username" class="field__label">Username</label>
+        <input
+          id="username"
+          type="text"
+          formControlName="username"
+          class="input"
+          placeholder="Enter username"
+          [class.is-invalid]="settingsForm.get('username')?.touched && settingsForm.get('username')?.invalid"
+        />
+        @if (settingsForm.get('username')?.touched && settingsForm.get('username')?.errors?.['required']) {
+        <span class="field__error">Username is required.</span>
+        }
+        @if (settingsForm.get('username')?.touched && settingsForm.get('username')?.errors?.['maxlength']) {
+        <span class="field__error">Username cannot exceed 50 characters.</span>
+        }
+      </div>
+
+      <div class="field">
+        <label for="email" class="field__label">Email Address</label>
+        <input
+          id="email"
+          type="email"
+          formControlName="email"
+          class="input"
+          placeholder="Enter email address"
+          [class.is-invalid]="settingsForm.get('email')?.touched && settingsForm.get('email')?.invalid"
+        />
+        @if (settingsForm.get('email')?.touched && settingsForm.get('email')?.errors?.['required']) {
+        <span class="field__error">Email address is required.</span>
+        }
+        @if (settingsForm.get('email')?.touched && settingsForm.get('email')?.errors?.['email']) {
+        <span class="field__error">Please enter a valid email address.</span>
+        }
+        @if (settingsForm.get('email')?.touched && settingsForm.get('email')?.errors?.['maxlength']) {
+        <span class="field__error">Email cannot exceed 256 characters.</span>
+        }
+      </div>
+
+      <div class="settings-divider"></div>
+
+      <div class="settings-section-header">
+        <h2 class="settings-section-title">Change Password</h2>
+        <p class="field__hint">Leave these fields blank if you do not want to update your password.</p>
+      </div>
+
+      <div class="field">
+        <label for="currentPassword" class="field__label">Current Password</label>
+        <input
+          id="currentPassword"
+          type="password"
+          formControlName="currentPassword"
+          class="input"
+          placeholder="Enter current password"
+          [class.is-invalid]="settingsForm.touched && settingsForm.errors?.['currentPasswordRequired']"
+        />
+        @if (settingsForm.touched && settingsForm.errors?.['currentPasswordRequired']) {
+        <span class="field__error">Current password is required to change password.</span>
+        }
+      </div>
+
+      <div class="field">
+        <label for="newPassword" class="field__label">New Password</label>
+        <input
+          id="newPassword"
+          type="password"
+          formControlName="newPassword"
+          class="input"
+          placeholder="Enter new password (min 6 characters)"
+          [class.is-invalid]="settingsForm.get('newPassword')?.touched && settingsForm.get('newPassword')?.invalid"
+        />
+        @if (settingsForm.get('newPassword')?.touched && settingsForm.get('newPassword')?.errors?.['minlength']) {
+        <span class="field__error">Password must be at least 6 characters.</span>
+        }
+      </div>
+
+      <div class="field">
+        <label for="confirmNewPassword" class="field__label">Confirm New Password</label>
+        <input
+          id="confirmNewPassword"
+          type="password"
+          formControlName="confirmNewPassword"
+          class="input"
+          placeholder="Confirm new password"
+          [class.is-invalid]="settingsForm.touched && settingsForm.errors?.['passwordsMismatch']"
+        />
+        @if (settingsForm.touched && settingsForm.errors?.['passwordsMismatch']) {
+        <span class="field__error">Passwords do not match.</span>
+        }
+      </div>
+
+      <div class="settings-actions">
+        <button type="submit" class="btn btn--primary" [disabled]="isSaving() || settingsForm.invalid">
+          {{ isSaving() ? 'Saving changes...' : 'Save Settings' }}
+        </button>
+        <a routerLink="/problems" class="btn btn--ghost">Cancel</a>
+      </div>
+    </form>
+    }
+  </div>
+</div>

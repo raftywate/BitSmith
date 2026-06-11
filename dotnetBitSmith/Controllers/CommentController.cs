@@ -20,8 +20,8 @@ namespace dotnetBitSmith.Controllers {
         [Authorize]
         [EnableRateLimiting("post-content-policy")] 
         [ProducesResponseType(typeof(CommentViewModel), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
         public async Task<ActionResult<CommentViewModel>> CreateComment([FromBody] CommentCreateModel model) {
             Guid userId = User.GetUserId();

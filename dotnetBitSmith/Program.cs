@@ -8,6 +8,7 @@ using dotnetBitSmith.Middleware;
 using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -19,6 +20,7 @@ using dotnetBitSmith.Entities;
 //So, when AuthService asks for JwtSettings:Key, the configuration manager will find it in the
 //User Secrets and provide it.
 var builder = WebApplication.CreateBuilder(args);
+builder.Environment.WebRootPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot");
 const string DEV_CORS_POLICY = "AllowDevOrigin";
 
 // --- Add services to the container ---
@@ -42,12 +44,16 @@ builder.Services.AddControllers()
         // This converter allows the API to accept "Easy" as a string
         // and correctly map it to the ProblemDifficulty.Easy enum (value 0).
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        // Use camelCase for JSON property names to match frontend expectations
+        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        // Accept both camelCase and PascalCase in incoming requests for flexibility
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
     });
 
 
 // 2. Configure Swagger/OpenAPI
 builder.Services.AddSwaggerGen(options => {
-    options.SwaggerDoc("v1", new OpenApiInfo { Title = "BitSmith API", Version = "v1" });
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "Compylr API", Version = "v1" });
     // Add JWT "Authorize" button to Swagger UI
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme {
         In = ParameterLocation.Header,
@@ -134,7 +140,7 @@ builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<IProblemService, ProblemService>();
 builder.Services.AddScoped<ISolutionService, SolutionService>();
 builder.Services.AddScoped<ISubmissionService, SubmissionService>();
-builder.Services.AddScoped<ICompilationService, Judge0CompilationService>(); // <-- THIS IS NEW
+builder.Services.AddScoped<ICompilationService, DockerCompilationService>();
 
 // Add Swagger for API documentation
 builder.Services.AddEndpointsApiExplorer();
@@ -159,6 +165,8 @@ app.UseHttpsRedirection();
 
 app.UseCors(DEV_CORS_POLICY);
 
+app.UseStaticFiles();
+
 // Add the Rate Limiter to the pipeline
 app.UseRateLimiter();
 // Add authentication (who are you?)
@@ -168,5 +176,167 @@ app.UseAuthorization();
 
 // This line tells the app to find and use Controller files
 app.MapControllers();
+
+if (args.Contains("--import-leetcode")) {
+    using (var scope = app.Services.CreateScope()) {
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        
+        logger.LogInformation("Startup seeder: Starting LeetCode problems import...");
+        try {
+            var filePath = Path.Combine(Directory.GetCurrentDirectory(), "problems.json");
+            if (System.IO.File.Exists(filePath)) {
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (
+                        SELECT * FROM sys.columns 
+                        WHERE object_id = OBJECT_ID(N'[dbo].[Problems]') 
+                        AND name = N'HintsJson'
+                    )
+                    BEGIN
+                        ALTER TABLE [dbo].[Problems] ADD [HintsJson] NVARCHAR(MAX) NULL;
+                    END
+                ");
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (
+                        SELECT * FROM sys.columns 
+                        WHERE object_id = OBJECT_ID(N'[dbo].[TestCases]') 
+                        AND name = N'InputLabelsJson'
+                    )
+                    BEGIN
+                        ALTER TABLE [dbo].[TestCases] ADD [InputLabelsJson] NVARCHAR(MAX) NULL;
+                    END
+                ");
+                var jsonContent = System.IO.File.ReadAllText(filePath);
+                // Clear existing questions, limit to 75 Easy, 100 Medium, 50 Hard
+                var result = dotnetBitSmith.Helpers.ProblemSeeder.SeedProblemsFromJsonAsync(
+                    jsonContent, context, logger, null, true, 75, 100, 50).GetAwaiter().GetResult();
+                logger.LogInformation("Startup seeder: Import completed! Imported: {Imported}, Errors: {Errors}", result.SuccessfullyImported, result.Errors);
+                if (result.ErrorMessages.Any()) {
+                    logger.LogWarning("Errors encountered during seeding:\n{Errors}", string.Join("\n", result.ErrorMessages));
+                }
+            } else {
+                logger.LogError("Startup seeder: problems.json not found at {Path}", filePath);
+            }
+        } catch (Exception ex) {
+            logger.LogError(ex, "Startup seeder: Fatal error occurred during seeding.");
+        }
+    }
+    return;
+}
+
+    using (var scope = app.Services.CreateScope()) {
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        try {
+            logger.LogInformation("Startup: Ensuring PreferredLanguage and LayoutState columns exist in Users table...");
+            await context.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Users]') 
+                    AND name = N'PreferredLanguage'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Users] ADD [PreferredLanguage] NVARCHAR(50) NULL;
+                END
+            ");
+            await context.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Users]') 
+                    AND name = N'LayoutState'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Users] ADD [LayoutState] NVARCHAR(MAX) NULL;
+                END
+            ");
+            await context.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Submissions]') 
+                    AND name = N'PassedCount'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Submissions] ADD [PassedCount] INT NOT NULL DEFAULT 0;
+                END
+            ");
+            await context.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Submissions]') 
+                    AND name = N'TotalCount'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Submissions] ADD [TotalCount] INT NOT NULL DEFAULT 0;
+                END
+            ");
+            await context.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Submissions]') 
+                    AND name = N'FailedTestCaseInput'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Submissions] ADD [FailedTestCaseInput] NVARCHAR(MAX) NULL;
+                END
+            ");
+            await context.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Submissions]') 
+                    AND name = N'FailedTestCaseExpected'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Submissions] ADD [FailedTestCaseExpected] NVARCHAR(MAX) NULL;
+                END
+            ");
+            await context.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Submissions]') 
+                    AND name = N'FailedTestCaseActual'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Submissions] ADD [FailedTestCaseActual] NVARCHAR(MAX) NULL;
+                END
+            ");
+            await context.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Problems]') 
+                    AND name = N'HintsJson'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Problems] ADD [HintsJson] NVARCHAR(MAX) NULL;
+                END
+            ");
+            await context.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[TestCases]') 
+                    AND name = N'InputLabelsJson'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[TestCases] ADD [InputLabelsJson] NVARCHAR(MAX) NULL;
+                END
+            ");
+            logger.LogInformation("Startup: Database columns checked and initialized.");
+        } catch (Exception ex) {
+            logger.LogError(ex, "Failed to update database schema for User preferences.");
+        }
+
+        if (app.Environment.IsDevelopment()) {
+            try {
+                // Note: Since CountAsync is an EF Core async extension method, we can await it
+                var hiddenCount = await context.TestCases.CountAsync(t => t.IsHidden);
+                if (hiddenCount > 0) {
+                    logger.LogInformation("Found {Count} hidden test cases. Making them all visible...", hiddenCount);
+                    await context.Database.ExecuteSqlRawAsync("UPDATE TestCases SET IsHidden = 0;");
+                    logger.LogInformation("All test cases are now visible.");
+                }
+            } catch (Exception ex) {
+                logger.LogError(ex, "Failed to update IsHidden flag on startup.");
+            }
+        }
+    }
 
 app.Run();

@@ -27,12 +27,15 @@ namespace dotnetBitSmith.Services {
                 throw new NotFoundException("Problem with ID " + model.ProblemId + " not found.");
             }
 
+            var normalizedLang = model.Language?.Trim().ToLower() ?? string.Empty;
+            if (normalizedLang == "c#") normalizedLang = "csharp";
+
             var newSubmission = new Submission {
                 Id = Guid.NewGuid(),
                 UserId = userId,
                 ProblemId = model.ProblemId,
                 Status = SubmissionStatus.Pending,
-                Language = model.Language,
+                Language = normalizedLang,
                 Code = model.Code,
                 CreatedAt = DateTime.UtcNow
             };
@@ -46,8 +49,6 @@ namespace dotnetBitSmith.Services {
                 newSubmission = await _compilationService.JudgeSubmissionAsync(newSubmission);
             } catch(Exception ex) {
                 _logger.LogError(ex, "Judge failed for Submission {SubmissionID}. Setting to InternalError.", newSubmission.Id);
-                // The Judge service already handles setting the error state,
-                // but we catch it here just in case the service itself blows up.
                 newSubmission.Status = SubmissionStatus.InternalError;
             }
 
@@ -57,7 +58,13 @@ namespace dotnetBitSmith.Services {
                 Id = newSubmission.Id,
                 ProblemId = newSubmission.ProblemId,
                 Status = newSubmission.Status,
-                CreatedAt = newSubmission.CreatedAt
+                ErrorMessage = newSubmission.ErrorMessage,
+                CreatedAt = newSubmission.CreatedAt,
+                PassedCount = newSubmission.PassedCount,
+                TotalCount = newSubmission.TotalCount,
+                FailedTestCaseInput = newSubmission.FailedTestCaseInput,
+                FailedTestCaseExpected = newSubmission.FailedTestCaseExpected,
+                FailedTestCaseActual = newSubmission.FailedTestCaseActual
             };
         }
 
@@ -67,19 +74,70 @@ namespace dotnetBitSmith.Services {
             var submissions = await _context.Submissions
             .AsNoTracking()
             .Where(s => s.UserId == userId && s.ProblemId == problemId)
+            .OrderByDescending(s => s.CreatedAt)
             .Select(
                 s => new SubmissionDetailModel {
                     Id = s.Id,
+                    ProblemId = s.ProblemId,
                     Code = s.Code,
                     Language = s.Language,
                     Status = s.Status,
                     ExecutionTimeMs = s.ExecutionTimeMs,
                     ExecutionMemoryKb = s.ExecutionMemoryKb,
-                    CreatedAt = s.CreatedAt
+                    ErrorMessage = s.ErrorMessage,
+                    CreatedAt = s.CreatedAt,
+                    PassedCount = s.PassedCount,
+                    TotalCount = s.TotalCount,
+                    FailedTestCaseInput = s.FailedTestCaseInput,
+                    FailedTestCaseExpected = s.FailedTestCaseExpected,
+                    FailedTestCaseActual = s.FailedTestCaseActual
                 })
             .ToListAsync();
 
             return submissions;
+        }
+
+        public async Task<IEnumerable<SampleRunResultModel>> RunSampleTestsAsync(SampleRunRequestModel model, Guid userId) {
+            _logger.LogInformation("User {UserId} running sample tests for Problem {ProblemId}", userId, model.ProblemId);
+
+            var problem = await _context.Problems
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == model.ProblemId);
+
+            if (problem == null) {
+                _logger.LogWarning("User {UserId} failed to run sample tests for non-existent Problem {ProblemId}", userId, model.ProblemId);
+                throw new NotFoundException("Problem with ID " + model.ProblemId + " not found.");
+            }
+
+            var testCases = await _context.TestCases
+                .AsNoTracking()
+                .Where(testCase => testCase.ProblemId == model.ProblemId && !testCase.IsHidden)
+                .OrderBy(testCase => testCase.Id)
+                .ToListAsync();
+
+            if (!testCases.Any()) {
+                return Enumerable.Empty<SampleRunResultModel>();
+            }
+
+            var normalizedLang = model.Language?.Trim().ToLower() ?? string.Empty;
+            if (normalizedLang == "c#") normalizedLang = "csharp";
+
+            var problemTitle = problem.Title;
+            var problemDesc = problem.Description;
+
+            var tasks = testCases.Select(testCase => _compilationService.RunSampleAsync(normalizedLang, model.Code, testCase, problemTitle, problemDesc));
+            var results = await Task.WhenAll(tasks);
+
+            return results;
+        }
+
+        public async Task<RunCodeResultModel> RunCustomCodeAsync(RunCodeRequestModel model, Guid userId) {
+            _logger.LogInformation("User {UserId} running custom code run", userId);
+            
+            var normalizedLang = model.Language?.Trim().ToLower() ?? string.Empty;
+            if (normalizedLang == "c#") normalizedLang = "csharp";
+
+            return await _compilationService.ExecuteCustomCodeAsync(normalizedLang, model.Code, model.CustomStdin);
         }
     }
 }

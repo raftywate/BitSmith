@@ -16,6 +16,8 @@ namespace dotnetBitSmith.Models.Problems {
 
         public string? StarterCode { get; set; }
 
+        public List<string> Hints { get; set; } = new();
+
         [Required]
         public List<Guid> CategoryIDs { get; set; }
     }

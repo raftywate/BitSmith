@@ -20,25 +20,32 @@ namespace dotnetBitSmith.Services {
         }
 
         public async Task<AuthResponseModel> RegisterAsync(UserRegisterModel model) {
-            var userExists = _context.Users.AnyAsync(u => u.Email == model.Email);
-            if (userExists == null) {
+            var userExists = await _context.Users.AnyAsync(u => u.Email == model.Email);
+            if (userExists) {
                 throw new DuplicateUserException("User with this email already exists.");
             }
 
-            userExists = _context.Users.AnyAsync(u => u.Username == model.Username);
-            if (userExists == null) {
+            userExists = await _context.Users.AnyAsync(u => u.Username == model.Username);
+            if (userExists) {
                 throw new DuplicateUserException("User with this username already exists.");
             }
 
             string passwordHash = BCrypt.Net.BCrypt.HashPassword(model.Password);
+
+            // Check invite code — if it matches the configured secret, grant Admin role
+            var configuredCode = _configuration["AdminSettings:InviteCode"];
+            var role = (!string.IsNullOrEmpty(configuredCode) &&
+                        !string.IsNullOrEmpty(model.InviteCode) &&
+                        model.InviteCode.Trim() == configuredCode.Trim())
+                       ? "Admin"
+                       : "User";
 
             var user = new User {
                 Id = Guid.NewGuid(),
                 Username = model.Username,
                 Email = model.Email,
                 PasswordHash = passwordHash,
-                UserRole = "User" // Default role
-                // Other properties (like CreatedAt) have default values
+                UserRole = role
             };
 
             await _context.Users.AddAsync(user);
@@ -48,10 +55,14 @@ namespace dotnetBitSmith.Services {
         }
 
         public async Task<AuthResponseModel> LoginAsync(UserLoginModel model) {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == model.Email);
+            var login = model.EmailOrUsername.Trim();
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == login || u.Username == login);
             if (user == null || !BCrypt.Net.BCrypt.Verify(model.Password, user.PasswordHash)) {
-                throw new InvalidLoginException("Invalid email or password.");
+                throw new InvalidLoginException("Invalid email/username or password.");
             }
+
+            user.LastLoginAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
 
             return GenerateJwtToken(user);
         }
@@ -91,7 +102,7 @@ namespace dotnetBitSmith.Services {
                 SigningCredentials = creds
             };
 
-            // 4. Create and write the token
+    // 4. Create and write the token
             var tokenHandler = new JwtSecurityTokenHandler();
             var token = tokenHandler.CreateToken(tokenDescriptor);
             var tokenString = tokenHandler.WriteToken(token);
@@ -101,7 +112,8 @@ namespace dotnetBitSmith.Services {
                 Token = tokenString,
                 UserId = user.Id,
                 Username = user.Username,
-                Role = user.UserRole
+                Role = user.UserRole,
+                ProfilePictureUrl = user.ProfilePictureUrl
             };
         }
     }

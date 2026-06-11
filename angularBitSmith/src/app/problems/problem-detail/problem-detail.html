@@ -1,38 +1,749 @@
-<!-- New Angular 17+ syntax -->
-@let problem = (problem$ | async);
+<section class="workspace-page">
+  @if (problemError()) {
+  <div class="error-state workspace-page__state">{{ problemError() }}</div>
+  } @else if (isLoadingProblem()) {
+  <div class="workspace-page__skeleton">
+    <div class="glass-panel workspace-page__skeleton-card">
+      <app-skeleton width="8rem" height="1rem"></app-skeleton>
+      <app-skeleton width="18rem" height="2rem"></app-skeleton>
+      <app-skeleton width="100%" height="10rem"></app-skeleton>
+    </div>
+    <div class="panel workspace-page__skeleton-card">
+      <app-skeleton width="8rem" height="1rem"></app-skeleton>
+      <app-skeleton width="100%" height="28rem"></app-skeleton>
+    </div>
+  </div>
+  } @else if (problem(); as problemModel) {
 
-@if (!problem) {
-<p>Loading...</p>
-} @else {
-<div class="p-4">
-    <h1 class="text-2xl font-bold mb-4">{{ problem.title }}</h1>
 
-    <section class="mt-6">
-        <h2 class="text-xl font-semibold">Description</h2>
-        <p class="mt-2 whitespace-pre-line">
-            {{ problem.description }}
-        </p>
+  <as-split class="workspace-dock" [direction]="mainSplitDirection()" unit="percent" [gutterSize]="4" (dragEnd)="onMainSplitDragEnd($event)">
+    <as-split-area [size]="mainSplitDirection() === 'horizontal' ? mainSplitSizesHorizontal()[0] : mainSplitSizesVertical()[0]"
+      [minSize]="mainSplitDirection() === 'horizontal' ? 30 : 28">
+      <section class="dock-column">
+        @if (columnHasBottomZone('left')) {
+        <as-split class="dock-column__split" direction="vertical" unit="percent" [gutterSize]="4" (dragEnd)="onLeftSplitDragEnd($event)">
+          <as-split-area [size]="leftSplitSizes()[0]" [minSize]="28">
+            <ng-container [ngTemplateOutlet]="dockZone"
+              [ngTemplateOutletContext]="{ zoneId: 'leftTop', allowBelow: true, columnId: 'left' }"></ng-container>
+          </as-split-area>
+          <as-split-area [size]="leftSplitSizes()[1]" [minSize]="22">
+            <ng-container [ngTemplateOutlet]="dockZone"
+              [ngTemplateOutletContext]="{ zoneId: 'leftBottom', allowBelow: false, columnId: 'left' }"></ng-container>
+          </as-split-area>
+        </as-split>
+        } @else {
+        <ng-container [ngTemplateOutlet]="dockZone"
+          [ngTemplateOutletContext]="{ zoneId: 'leftTop', allowBelow: true, columnId: 'left' }"></ng-container>
+        }
+      </section>
+    </as-split-area>
+
+    <as-split-area [size]="mainSplitDirection() === 'horizontal' ? mainSplitSizesHorizontal()[1] : mainSplitSizesVertical()[1]"
+      [minSize]="mainSplitDirection() === 'horizontal' ? 34 : 28">
+      <section class="dock-column">
+        @if (columnHasBottomZone('right')) {
+        <as-split class="dock-column__split" direction="vertical" unit="percent" [gutterSize]="4" (dragEnd)="onRightSplitDragEnd($event)">
+          <as-split-area [size]="rightSplitSizes()[0]" [minSize]="30">
+            <ng-container [ngTemplateOutlet]="dockZone"
+              [ngTemplateOutletContext]="{ zoneId: 'rightTop', allowBelow: true, columnId: 'right' }"></ng-container>
+          </as-split-area>
+          <as-split-area [size]="rightSplitSizes()[1]" [minSize]="22">
+            <ng-container [ngTemplateOutlet]="dockZone"
+              [ngTemplateOutletContext]="{ zoneId: 'rightBottom', allowBelow: false, columnId: 'right' }"></ng-container>
+          </as-split-area>
+        </as-split>
+        } @else {
+        <ng-container [ngTemplateOutlet]="dockZone"
+          [ngTemplateOutletContext]="{ zoneId: 'rightTop', allowBelow: true, columnId: 'right' }"></ng-container>
+        }
+      </section>
+    </as-split-area>
+  </as-split>
+
+  <ng-template #dockZone let-zoneId="zoneId" let-allowBelow="allowBelow" let-columnId="columnId">
+    <section class="dock-zone panel" [class.dock-zone--fullscreen]="isZoneFullscreen(zoneId)">
+      <div class="dock-zone__chrome">
+        <div class="dock-zone__tabs" [class.dock-zone__tabs--target]="isZoneDropTarget(zoneId)"
+          (dragover)="allowZoneDrop($event, zoneId)" (drop)="handleZoneDrop($event, zoneId)">
+          @if (zoneHasTabs(zoneId)) {
+          @for (tabId of zoneTabs(zoneId); track tabId) {
+          <button type="button" class="dock-tab" [class.dock-tab--active]="zoneActiveTab(zoneId) === tabId"
+            [attr.aria-pressed]="zoneActiveTab(zoneId) === tabId" draggable="true"
+            (click)="setZoneActiveTab(zoneId, tabId)" (dragstart)="startDockDrag($event, tabId)"
+            (dragend)="handleDockDragEnd()">
+            {{ dockTabLabel(tabId) }}
+          </button>
+          }
+          } @else {
+          <span class="dock-zone__placeholder">Drop a tab here</span>
+          }
+        </div>
+
+        <div class="dock-zone__actions">
+          @if (zoneHasTabs(zoneId)) {
+            @if (zoneActiveTab(zoneId) === 'editor') {
+              <button type="button" class="btn-icon-fullscreen" (click)="formatCode()" title="Format Code">
+                <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M16 18l6-6-6-6M8 6l-6 6 6 6" />
+                </svg>
+              </button>
+
+              <div class="editor-settings-container">
+                <button type="button" class="btn-icon-fullscreen" (click)="toggleEditorSettings($event)" title="Editor Settings">
+                  <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                </button>
+
+                @if (editorSettingsOpen()) {
+                <div class="editor-settings-menu panel glass-panel">
+                  <div class="editor-settings-menu__field">
+                    <span class="editor-settings-menu__label">Theme</span>
+                    <select class="select select--small" [ngModel]="editorTheme()" (ngModelChange)="setEditorTheme($event)">
+                      @for (theme of editorThemeOptions; track theme.value) {
+                      <option [value]="theme.value">{{ theme.label }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div class="editor-settings-menu__field">
+                    <span class="editor-settings-menu__label">Font size</span>
+                    <select class="select select--small" [ngModel]="editorFontSize()" (ngModelChange)="setEditorFontSize(+$event)">
+                      <option [value]="12">12 px</option>
+                      <option [value]="13">13 px</option>
+                      <option [value]="14">14 px</option>
+                      <option [value]="15">15 px</option>
+                      <option [value]="16">16 px</option>
+                      <option [value]="18">18 px</option>
+                      <option [value]="20">20 px</option>
+                    </select>
+                  </div>
+                  <div class="editor-settings-menu__field">
+                    <span class="editor-settings-menu__label">Font Style</span>
+                    <select class="select select--small" [ngModel]="editorFontFamily()" (ngModelChange)="setEditorFontFamily($event)">
+                      <option value="IBM Plex Mono">IBM Plex Mono</option>
+                      <option value="Cascadia">Cascadia Code</option>
+                      <option value="Fira Code">Fira Code</option>
+                    </select>
+                  </div>
+                  <div class="editor-settings-menu__field">
+                    <span class="editor-settings-menu__label">Tab spaces</span>
+                    <select class="select select--small" [ngModel]="editorTabSize()" (ngModelChange)="setEditorTabSize(+$event)">
+                      <option [value]="2">2 spaces</option>
+                      <option [value]="4">4 spaces</option>
+                      <option [value]="8">8 spaces</option>
+                    </select>
+                  </div>
+                  <div class="editor-settings-menu__divider"></div>
+                  <button type="button" class="btn btn--subtle btn--small" style="width: 100%; text-align: center; justify-content: center; height: auto; padding: 0.45rem;" (click)="resetDockLayout()">
+                    Reset Layout
+                  </button>
+                </div>
+                }
+              </div>
+            }
+
+          <button type="button" class="btn-icon-fullscreen" (click)="toggleZoneFullscreen(zoneId)" [attr.title]="isZoneFullscreen(zoneId) ? 'Exit full screen' : 'Full screen'">
+            @if (isZoneFullscreen(zoneId)) {
+              <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 10h6V4M20 10h-6V4M4 14h6v6M20 14h-6v6" />
+              </svg>
+            } @else {
+              <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 8V4h4M16 4h4v4M4 16v4h4M20 16v4h-4" />
+              </svg>
+            }
+          </button>
+          }
+        </div>
+      </div>
+
+      <div class="dock-zone__body">
+        @if (zoneActiveTab(zoneId); as activePanelId) {
+        <ng-container [ngTemplateOutlet]="dockPanelContent"
+          [ngTemplateOutletContext]="{ $implicit: activePanelId, zoneId: zoneId }"></ng-container>
+        } @else {
+        <div class="dock-zone__empty-state">
+          Move any tab here to open another working pane.
+        </div>
+        }
+      </div>
+
+
     </section>
+  </ng-template>
 
-    <section class="mt-6">
-        <h2 class="text-xl font-semibold">Constraints</h2>
-        <p class="mt-2 whitespace-pre-line">
-            {{ problem.constraints }}
-        </p>
-    </section>
+  <ng-template #dockPanelContent let-panelId let-zoneId="zoneId">
+    @switch (panelId) {
+    @case ('description') {
+    <article class="tab-panel tab-panel--copy">
+      <div class="problem-header-merged">
+        <div class="problem-header-merged__top">
+          <span class="eyebrow eyebrow--small">Problem {{ problemModel.problemNumber }}</span>
+          <div class="problem-header-merged__actions">
+            @if (authService.isAdmin$()) {
+            <a class="btn btn--subtle btn--small" [routerLink]="['/admin']" [queryParams]="{ problemId: problemModel.id }">Edit</a>
+            }
+            <span class="difficulty-chip" [class.easy]="problemModel.difficulty === ProblemDifficulty.Easy"
+              [class.medium]="problemModel.difficulty === ProblemDifficulty.Medium"
+              [class.hard]="problemModel.difficulty === ProblemDifficulty.Hard">
+              {{ problemModel.difficulty }}
+            </span>
+          </div>
+        </div>
 
-    <section class="mt-6">
-        <h2 class="text-xl font-semibold">Examples</h2>
-        <p class="mt-2 whitespace-pre-line">
-            {{ problem.examples }}
-        </p>
-    </section>
+        <h1 class="problem-header-merged__title">{{ problemModel.title }}</h1>
 
-    <section class="mt-6">
-        <h2 class="text-xl font-semibold">Starter Code</h2>
-        <pre class="bg-gray-900 text-white p-4 rounded mt-2 overflow-auto">
-{{ problem.starterCode }}
-      </pre>
+        <div class="workspace-page__topics">
+          <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+            <button type="button" class="topics-toggle" (click)="toggleTopics()">
+              <svg class="topics-toggle__arrow" [class.topics-toggle__arrow--open]="topicsOpen()"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round" width="12" height="12">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+              Topics
+              <span class="topics-toggle__count">{{ problemModel.categories.length }}</span>
+            </button>
+
+            @if (problemModel.hints && problemModel.hints.length > 0) {
+            <button type="button" class="topics-toggle" (click)="scrollToHints()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="12" height="12">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+              Hints
+              <span class="topics-toggle__count" style="background: rgba(168, 85, 247, 0.15); border-color: rgba(168, 85, 247, 0.3); color: var(--accent);">
+                {{ problemModel.hints.length }}
+              </span>
+            </button>
+            }
+          </div>
+
+          @if (topicsOpen()) {
+          <div class="topics-pills">
+            @for (category of problemModel.categories; track category.id) {
+            <span class="pill">{{ category.name }}</span>
+            }
+          </div>
+          }
+        </div>
+      </div>
+
+      <div class="workspace-copy" [innerHTML]="problemModel.description | mdRender"></div>
+
+      @if (problemModel.hints.length) {
+      <section class="hint-card panel" id="hints-section" style="scroll-margin-top: 1.5rem;">
+        <div class="hint-card__header">
+          <span>Hints</span>
+          <small>{{ problemModel.hints.length }} available</small>
+        </div>
+        <div class="hints-accordion">
+          @for (hint of problemModel.hints; track $index) {
+          <details class="hint-details">
+            <summary class="hint-summary">
+              <span>Hint {{ $index + 1 }}</span>
+              <svg class="hint-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </summary>
+            <div class="hint-content" [innerHTML]="hint | mdRender"></div>
+          </details>
+          }
+        </div>
+      </section>
+      }
+    </article>
+    }
+
+    @case ('solutions') {
+    <section class="tab-panel tab-panel--scroll">
+      <div class="tab-panel__header">
+        <div>
+          <p class="tab-panel__eyebrow">Community</p>
+          <h2>Solutions</h2>
+        </div>
+        <button type="button" class="btn btn--primary" (click)="toggleSolutionComposer()">
+          {{ solutionComposerOpen() ? 'Close composer' : 'Write a solution' }}
+        </button>
+      </div>
+
+      <p class="tab-panel__intro">
+        Read other approaches, then drag this tab below the prompt or code if you want the discussion visible while you work.
+      </p>
+
+      @if (solutionComposerOpen()) {
+      <form class="composer panel" [formGroup]="solutionForm" (ngSubmit)="publishSolution()">
+        <label class="field">
+          <span class="field__label">Title</span>
+          <input class="input" type="text" formControlName="title"
+            placeholder="Explain the core idea in one strong sentence" />
+          @if (solutionForm.controls.title.invalid && solutionForm.controls.title.touched) {
+          <p class="field__error">Use a title between 10 and 100 characters.</p>
+          }
+        </label>
+
+        <label class="field">
+          <span class="field__label">Your explanation</span>
+          <textarea class="textarea" formControlName="content"
+            placeholder="Walk through your approach, tradeoffs, and why it works."></textarea>
+          @if (solutionForm.controls.content.invalid && solutionForm.controls.content.touched) {
+          <p class="field__error">Write at least 50 characters so the explanation is useful.</p>
+          }
+        </label>
+
+        <button type="submit" class="btn btn--primary">Publish solution</button>
+      </form>
+      }
+
+      @if (isLoadingSolutions()) {
+      <div class="workspace-page__skeleton-stack">
+        @for (item of [1, 2, 3]; track item) {
+        <div class="panel solution-card solution-card--loading">
+          <app-skeleton width="50%" height="1.4rem"></app-skeleton>
+          <app-skeleton width="75%" height="1rem"></app-skeleton>
+          <app-skeleton width="100%" height="4rem"></app-skeleton>
+        </div>
+        }
+      </div>
+      } @else if (!solutions().length) {
+      <div class="empty-state">No community solutions yet. Be the first to set the tone for this problem.</div>
+      } @else {
+      @for (solution of solutions(); track solution.id) {
+      <article class="solution-card panel">
+        <div class="solution-card__summary">
+          <div class="solution-card__copy" (click)="toggleSolution(solution.id)">
+            <div class="solution-card__meta">
+              <span>{{ solution.authorName }}</span>
+              <span>{{ formatRelativeTime(solution.createdAt) }}</span>
+            </div>
+            <h3>{{ solution.title }}</h3>
+            <p>{{ solution.excerpt }}</p>
+          </div>
+
+          <div class="solution-card__actions">
+            <button type="button" class="vote-button" [class.vote-button--active]="solution.userVote === 'up'"
+              [disabled]="pendingVoteTargets()[voteKey('solution', solution.id)]" (click)="voteOnSolution(solution.id, true)">
+              ▲ {{ solution.voteCount }}
+            </button>
+            <button type="button" class="vote-button" [class.vote-button--active]="solution.userVote === 'down'"
+              [disabled]="pendingVoteTargets()[voteKey('solution', solution.id)]"
+              (click)="voteOnSolution(solution.id, false)">
+              ▼
+            </button>
+            <button type="button" class="btn btn--subtle" (click)="toggleSolution(solution.id)">
+              {{ solution.isExpanded ? 'Collapse' : 'Open' }}
+            </button>
+          </div>
+        </div>
+
+        @if (solution.isExpanded) {
+        <div class="solution-card__body">
+          @if (solution.isDetailLoading) {
+          <div class="workspace-page__skeleton-stack">
+            <app-skeleton width="100%" height="7rem"></app-skeleton>
+          </div>
+          } @else if (solution.detail) {
+          <div class="workspace-copy workspace-copy--solution">{{ solution.detail.content }}</div>
+          }
+
+          <div class="comments-card panel">
+            <div class="comments-card__header">
+              <h4>Discussion</h4>
+              <span>{{ solution.commentCount }} comments</span>
+            </div>
+
+            @if (authService.isLoggedIn$()) {
+            <div class="comment-composer">
+              <textarea class="textarea" [ngModel]="rootCommentDraft(solution.id)"
+                (ngModelChange)="setRootCommentDraft(solution.id, $event)"
+                placeholder="Add a thoughtful comment or ask a follow-up question."></textarea>
+              <button type="button" class="btn btn--primary" [disabled]="pendingCommentTargets()['solution:' + solution.id]"
+                (click)="postRootComment(solution.id)">
+                Post comment
+              </button>
+            </div>
+            } @else {
+            <div class="empty-state">
+              Sign in to join this discussion.
+              <button type="button" class="btn btn--ghost" (click)="goToLogin()">Sign in</button>
+            </div>
+            }
+
+            @if (!solution.comments.length && !solution.isCommentsLoading) {
+            <div class="empty-state">No comments yet. The first good question can shape the whole thread.</div>
+            }
+
+            @if (solution.comments.length) {
+            <div class="comment-thread">
+              @for (comment of solution.comments; track comment.id) {
+              <ng-container [ngTemplateOutlet]="commentNode"
+                [ngTemplateOutletContext]="{ $implicit: comment, solutionId: solution.id, depth: 0 }"></ng-container>
+              }
+            </div>
+            }
+
+            @if (solution.isCommentsLoading) {
+            <div class="workspace-page__skeleton-stack">
+              <app-skeleton width="100%" height="3rem"></app-skeleton>
+            </div>
+            }
+
+            @if (solution.hasMoreComments && !solution.isCommentsLoading) {
+            <button type="button" class="btn btn--ghost" (click)="loadMoreComments(solution.id)">
+              Load more comments
+            </button>
+            }
+          </div>
+        </div>
+        }
+      </article>
+      }
+      }
     </section>
-</div>
-}
+    }
+
+    @case ('submissions') {
+    <section class="tab-panel tab-panel--scroll">
+      @if (selectedSubmission(); as detail) {
+      <div class="submission-detail-view" style="display: grid; gap: 1.25rem; height: 100%;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
+          <button type="button" class="btn btn--subtle btn--small" style="display: inline-flex; align-items: center; gap: 6px; padding: 0.45rem 0.85rem; border-radius: 0.5rem; height: auto;" (click)="clearSelectedSubmission()">
+            <svg xmlns="http://www.w3.org/2000/svg" height="18px" viewBox="0 -960 960 960" width="18px" fill="currentColor" style="display: block;">
+              <path d="m313-440 224 224-57 57-320-320 320-320 57 57-224 224h527v80H313Z"/>
+            </svg>
+            All Submissions
+          </button>
+          <button type="button" class="btn btn--subtle btn--small" style="display: inline-flex; align-items: center; gap: 6px; padding: 0.45rem 0.85rem; border-radius: 0.5rem; height: auto;" (click)="copyToClipboard(detail.code)" title="Copy Submitted Code">
+            <svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor" style="display: block;">
+              <path d="M360-240q-29.7 0-50.85-21.15Q288-282.3 288-312v-480q0-29.7 21.15-50.85Q330.3-864 360-864h360q29.7 0 50.85 21.15Q792-821.7 792-792v480q0-29.7-21.15-50.85Q749.7-240 720-240H360Zm0-72h360v-480H360v480ZM216-96q-29.7 0-50.85-21.15Q144-138.3 144-168v-528h72v528h432v72H216Zm144-288v-480 480Z"/>
+            </svg>
+            Copy
+          </button>
+        </div>
+
+        <div class="result-card__summary" [attr.data-status]="detail.status" style="display: grid; gap: 0.65rem;">
+          <div class="result-card__badge" style="width: fit-content; padding: 0.45rem 0.85rem; border-radius: 999px;">{{ formatStatus(detail.status) }}</div>
+          
+          <h3 style="margin: 0; display: flex; align-items: baseline; gap: 8px; font-size: 1.5rem; font-weight: 700;">
+            {{ formatStatus(detail.status) }}
+            @if ((detail.totalCount ?? 0) > 0) {
+              <span style="font-size: 0.95rem; font-weight: 600; opacity: 0.85; color: var(--text-strong);">
+                ({{ detail.passedCount }} / {{ detail.totalCount }} testcases passed)
+              </span>
+            }
+          </h3>
+
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+            @if (authService.currentUser$(); as user) {
+              @if (user.profilePictureUrl) {
+                <img [src]="user.profilePictureUrl" alt="Avatar" style="width: 1.75rem; height: 1.75rem; border-radius: 50%; object-fit: cover;" />
+              } @else {
+                <span class="avatar-fallback" style="width: 1.75rem; height: 1.75rem; font-size: 0.75rem; display: inline-grid; place-items: center; border-radius: 50%;">
+                  {{ user.username.slice(0, 1).toUpperCase() }}
+                </span>
+              }
+              <span style="font-size: 0.9rem; font-weight: 700; color: var(--text-strong);">{{ user.username }}</span>
+            }
+            <span style="font-size: 0.88rem; color: var(--text-muted);">submitted at {{ detail.createdAt | date: 'medium' }}</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+          <div class="panel" style="flex: 1; min-width: 10rem; padding: 0.85rem; display: grid; gap: 4px;">
+            <span style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.05em;">Runtime</span>
+            <span style="font-size: 1.2rem; font-weight: 800; color: var(--text-strong);">{{ detail.executionTimeMs ?? '—' }} ms</span>
+          </div>
+          <div class="panel" style="flex: 1; min-width: 10rem; padding: 0.85rem; display: grid; gap: 4px;">
+            <span style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.05em;">Memory</span>
+            <span style="font-size: 1.2rem; font-weight: 800; color: var(--text-strong);">{{ detail.executionMemoryKb ? (detail.executionMemoryKb / 1024 | number:'1.2-2') + ' MB' : '—' }}</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.65rem; flex: 1; min-height: 0;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
+            <span style="font-size: 0.9rem; font-weight: 700; color: var(--text-muted);">Code | {{ detail.language | titlecase }}</span>
+            <button type="button" class="btn btn--primary btn--small" style="padding: 0.35rem 0.85rem; height: auto;" (click)="copyCodeToEditor(detail.code, detail.language)">
+              Copy to Editor
+            </button>
+          </div>
+          <pre style="margin: 0; padding: 1rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.75rem; font-family: var(--font-mono); font-size: 0.88rem; line-height: 1.55; overflow: auto; flex: 1; white-space: pre; color: var(--text-strong);">{{ detail.code }}</pre>
+        </div>
+      </div>
+      } @else {
+      <div class="tab-panel__header">
+        <div>
+          <p class="tab-panel__eyebrow">Progress</p>
+          <h2>My submissions</h2>
+        </div>
+      </div>
+
+      @if (!authService.isLoggedIn$()) {
+      <div class="empty-state">
+        Sign in to unlock your personal submission history for this problem.
+        <button type="button" class="btn btn--ghost" (click)="goToLogin()">Sign in</button>
+      </div>
+      } @else if (isLoadingSubmissions()) {
+      <div class="workspace-page__skeleton-stack">
+        <app-skeleton width="100%" height="5rem"></app-skeleton>
+        <app-skeleton width="100%" height="5rem"></app-skeleton>
+      </div>
+      } @else if (!submissions().length) {
+      <div class="empty-state">No submissions yet. Send your first attempt from the code pane.</div>
+      } @else {
+      <div class="submission-list">
+        @for (submission of submissions(); track submission.id) {
+        <button type="button" class="submission-card panel" [attr.data-status]="submission.status" (click)="viewSubmissionDetail(submission)">
+          <div>
+            <p class="submission-card__status">{{ formatStatus(submission.status) }}</p>
+            @if ((submission.totalCount ?? 0) > 0) {
+              <p style="margin: 0.15rem 0 0.45rem; font-size: 0.85rem; font-weight: 700; color: var(--text-strong);">
+                Passed {{ submission.passedCount }} / {{ submission.totalCount }} test cases
+              </p>
+            }
+            <h4>{{ submission.language }}</h4>
+            <p class="submission-card__meta">{{ submission.createdAt | date: 'medium' }}</p>
+          </div>
+          <div class="submission-card__metrics">
+            <span>Time: {{ submission.executionTimeMs ?? '—' }} ms</span>
+            <span>Memory: {{ submission.executionMemoryKb ?? '—' }} KB</span>
+          </div>
+        </button>
+        }
+      </div>
+      }
+      }
+    </section>
+    }
+
+    @case ('editor') {
+    <section class="editor-card">
+      <div class="editor-toolbar">
+        <label class="editor-toolbar__field">
+          <span>Language</span>
+          <select class="select" [ngModel]="editorLanguage()" (ngModelChange)="setEditorLanguage($event)">
+            @for (language of editorLanguages; track language.value) {
+            <option [value]="language.value">{{ language.label }}</option>
+            }
+          </select>
+        </label>
+
+        @if (authService.isLoggedIn$()) {
+        <button type="button" class="btn btn--subtle btn--small toolbar-reset-btn" (click)="resetCode()" style="margin-left: auto; padding: 0.45rem 1rem;">
+          Reset Code
+        </button>
+        }
+      </div>
+
+      <div class="editor-card__surface">
+        <ngx-monaco-editor class="editor-card__monaco" [options]="editorOptions()" [ngModel]="code()"
+          (ngModelChange)="updateCode($event)" (onInit)="onEditorInit($event)"></ngx-monaco-editor>
+
+        @if (!authService.isLoggedIn$()) {
+        <div class="editor-card__blur-overlay">
+          <div class="editor-card__blur-content panel glass-panel">
+            <span class="editor-card__blur-icon">🔐</span>
+            <h3>Sign in to start coding</h3>
+            <p>Access the interactive Monaco workspace, run sample tests, and submit your solutions.</p>
+            <button type="button" class="btn btn--primary btn--large" (click)="goToLogin()">Sign In to Compylr</button>
+          </div>
+        </div>
+        }
+      </div>
+    </section>
+    }
+
+    @case ('tests') {
+    <section class="tab-panel tab-panel--scroll">
+      <div class="tab-panel__header">
+        <div>
+          <p class="tab-panel__eyebrow">Runner</p>
+          <h2>Sample test cases</h2>
+        </div>
+      </div>
+
+      @if (!problemModel.sampleTestCases.length) {
+      <div class="empty-state">No visible sample test cases are configured for this problem yet.</div>
+      } @else {
+      <div class="sample-runner">
+        <div class="sample-runner__tabs">
+          @for (testCase of problemModel.sampleTestCases; track testCase.id; let index = $index) {
+          <button type="button" class="sample-runner__tab" [class.sample-runner__tab--active]="selectedSampleIndex() === index"
+            (click)="setSampleIndex(index)">
+            Case {{ index + 1 }}
+            @if (sampleRunResults()[index]; as result) {
+            <span [class.sample-runner__dot--pass]="result.passed" [class.sample-runner__dot--fail]="!result.passed"></span>
+            }
+          </button>
+          }
+        </div>
+
+        @if (problemModel.sampleTestCases[selectedSampleIndex()]; as testCase) {
+        <div class="sample-runner__grid">
+          <article>
+            <span>Input</span>
+            <div class="sample-runner__input-list">
+              @for (part of inputParts(testCase); track $index) {
+              <div class="sample-runner__input-item">
+                <span>{{ part.label }}</span>
+                <pre>{{ part.value }}</pre>
+              </div>
+              }
+            </div>
+          </article>
+          <article>
+            <span>Expected output</span>
+            <pre>{{ testCase.expectedOutput }}</pre>
+          </article>
+          <article>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <span>Your output</span>
+              @if (sampleRunResults()[selectedSampleIndex()]; as result) {
+                @if (result.error) {
+                  <button type="button" class="btn btn--subtle btn--icon" style="padding: 2px 6px; font-size: 11px; display: flex; align-items: center; gap: 4px; height: auto;" (click)="copyToClipboard(result.error)" title="Copy error">
+                    <svg xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 -960 960 960" width="14px" fill="currentColor">
+                      <path d="M360-240q-29.7 0-50.85-21.15Q288-282.3 288-312v-480q0-29.7 21.15-50.85Q330.3-864 360-864h360q29.7 0 50.85 21.15Q792-821.7 792-792v480q0-29.7-21.15-50.85Q749.7-240 720-240H360Zm0-72h360v-480H360v480ZM216-96q-29.7 0-50.85-21.15Q144-138.3 144-168v-528h72v528h432v72H216Zm144-288v-480 480Z"/>
+                    </svg>
+                    Copy
+                  </button>
+                }
+              }
+            </div>
+            @if (sampleRunResults()[selectedSampleIndex()]; as result) {
+            <pre>{{ result.actualOutput || result.error || result.status }}</pre>
+            } @else {
+            <pre>Run samples to see output.</pre>
+            }
+          </article>
+        </div>
+        }
+      </div>
+      }
+    </section>
+    }
+
+    @case ('result') {
+    <section class="tab-panel tab-panel--scroll">
+      <div class="tab-panel__header">
+        <div>
+          <p class="tab-panel__eyebrow">Judge</p>
+          <h2>Latest result</h2>
+        </div>
+      </div>
+
+      @if (latestSubmission(); as submission) {
+      <div class="result-card__summary" [attr.data-status]="submission.status" style="display: grid; gap: 0.65rem;">
+        <div class="result-card__badge" style="width: fit-content;">{{ formatStatus(submission.status) }}</div>
+        <h3 style="margin: 0;">{{ submissionSummary(submission) }}</h3>
+        @if ((submission.totalCount ?? 0) > 0) {
+          <p style="margin: 0; font-weight: 700; color: var(--text-strong); font-size: 0.95rem;">
+            Passed {{ submission.passedCount }} / {{ submission.totalCount }} test cases
+          </p>
+        }
+        <p style="margin: 0; font-size: 0.88rem; color: var(--text-muted);">Created {{ submission.createdAt | date: 'medium' }}</p>
+      </div>
+
+      @if (submission.status === 'WrongAnswer' && submission.failedTestCaseInput) {
+      <div class="panel failed-testcase-card" style="padding: 1.15rem; display: grid; gap: 0.85rem; border: 1px solid var(--status-hard); background: color-mix(in srgb, var(--status-hard) 6%, var(--surface-2));">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+          <h4 style="margin: 0; color: var(--status-hard); font-weight: 700;">Failed Test Case</h4>
+          <button type="button" class="btn btn--primary btn--small" style="padding: 0.35rem 0.85rem; height: auto;" (click)="addFailedTestCaseToRunner(submission.failedTestCaseInput!, submission.failedTestCaseExpected!)">
+            Add to Test Cases
+          </button>
+        </div>
+        
+        <div class="sample-runner__grid" style="margin-top: 0.5rem;">
+          <article>
+            <span style="font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 2px;">Input</span>
+            <pre style="margin: 0; padding: 0.65rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; font-family: var(--font-mono); font-size: 0.88rem;">{{ submission.failedTestCaseInput }}</pre>
+          </article>
+          <article>
+            <span style="font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 2px;">Expected Output</span>
+            <pre style="margin: 0; padding: 0.65rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; font-family: var(--font-mono); font-size: 0.88rem;">{{ submission.failedTestCaseExpected }}</pre>
+          </article>
+          <article>
+            <span style="font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 2px;">Your Output</span>
+            <pre style="margin: 0; padding: 0.65rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; font-family: var(--font-mono); font-size: 0.88rem;">{{ submission.failedTestCaseActual || '—' }}</pre>
+          </article>
+        </div>
+      </div>
+      }
+
+      @if (submission.errorMessage) {
+      <div class="result-card__error-console panel">
+        <div class="error-console-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <h4 style="margin: 0;">Execution Error Log</h4>
+          <button type="button" class="btn btn--subtle btn--icon" style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; height: auto;" (click)="copyToClipboard(submission.errorMessage)" title="Copy error log">
+            <svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor">
+              <path d="M360-240q-29.7 0-50.85-21.15Q288-282.3 288-312v-480q0-29.7 21.15-50.85Q330.3-864 360-864h360q29.7 0 50.85 21.15Q792-821.7 792-792v480q0-29.7-21.15-50.85Q749.7-240 720-240H360Zm0-72h360v-480H360v480ZM216-96q-29.7 0-50.85-21.15Q144-138.3 144-168v-528h72v528h432v72H216Zm144-288v-480 480Z"/>
+            </svg>
+            <span style="font-size: 13px;">Copy</span>
+          </button>
+        </div>
+        <pre class="error-log">{{ submission.errorMessage }}</pre>
+      </div>
+      }
+      } @else {
+      <div class="empty-state">Submit your code to surface status, timing, and memory feedback here.</div>
+      }
+    </section>
+    }
+
+
+    }
+  </ng-template>
+
+  <ng-template #commentNode let-comment let-solutionId="solutionId" let-depth="depth">
+    <article class="comment-node">
+      <div class="comment-node__header">
+        <span class="comment-node__avatar avatar-fallback">{{ comment.authorUsername.slice(0, 1).toUpperCase() }}</span>
+        <div>
+          <strong>{{ comment.authorUsername }}</strong>
+          <p>{{ formatRelativeTime(comment.createdAt) }}</p>
+        </div>
+      </div>
+
+      <p class="comment-node__content">{{ comment.content }}</p>
+
+      <div class="comment-node__actions">
+        <button type="button" class="vote-button" [class.vote-button--active]="comment.userVote === 'up'"
+          [disabled]="pendingVoteTargets()[voteKey('comment', comment.id)]" (click)="voteOnComment(solutionId, comment.id, true)">
+          ▲ {{ comment.voteCount }}
+        </button>
+        <button type="button" class="vote-button" [class.vote-button--active]="comment.userVote === 'down'"
+          [disabled]="pendingVoteTargets()[voteKey('comment', comment.id)]"
+          (click)="voteOnComment(solutionId, comment.id, false)">
+          ▼
+        </button>
+
+        @if (authService.isLoggedIn$()) {
+        <button type="button" class="btn btn--subtle comment-node__reply-button" (click)="toggleReplyComposer(comment.id)">
+          {{ isReplyComposerOpen(comment.id) ? 'Cancel' : 'Reply' }}
+        </button>
+        }
+      </div>
+
+      @if (isReplyComposerOpen(comment.id)) {
+      <div class="comment-composer comment-composer--reply">
+        <textarea class="textarea" [ngModel]="replyDraft(comment.id)" (ngModelChange)="setReplyDraft(comment.id, $event)"
+          placeholder="Write a direct reply."></textarea>
+        <button type="button" class="btn btn--primary" [disabled]="pendingCommentTargets()['comment:' + comment.id]"
+          (click)="postReply(solutionId, comment.id)">
+          Reply
+        </button>
+      </div>
+      }
+
+      @if (comment.replies.length) {
+      <div class="comment-node__children">
+        @for (reply of comment.replies; track reply.id) {
+        <ng-container [ngTemplateOutlet]="commentNode"
+          [ngTemplateOutletContext]="{ $implicit: reply, solutionId: solutionId, depth: depth + 1 }"></ng-container>
+        }
+      </div>
+      }
+    </article>
+  </ng-template>
+  }
+</section>

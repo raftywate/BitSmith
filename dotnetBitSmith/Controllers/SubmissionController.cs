@@ -34,6 +34,29 @@ namespace dotnetBitSmith.Controllers {
             return Ok(newSubmission);
         }
 
+        [HttpPost("run-samples")]
+        [EnableRateLimiting("submit-policy")]
+        [ProducesResponseType(typeof(IEnumerable<SampleRunResultModel>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+        public async Task<ActionResult<IEnumerable<SampleRunResultModel>>> RunSampleTests([FromBody] SampleRunRequestModel model) {
+            Guid userId = User.GetUserId();
+            var results = await _submissionService.RunSampleTestsAsync(model, userId);
+            return Ok(results);
+        }
+
+        [HttpPost("run-code")]
+        [EnableRateLimiting("submit-policy")]
+        [ProducesResponseType(typeof(RunCodeResultModel), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+        public async Task<ActionResult<RunCodeResultModel>> RunCode([FromBody] RunCodeRequestModel model) {
+            Guid userId = User.GetUserId();
+            var result = await _submissionService.RunCustomCodeAsync(model, userId);
+            return Ok(result);
+        }
+
         [HttpGet("problem/{problemId}")]
         [ProducesResponseType(typeof(IEnumerable<SubmissionDetailModel>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]

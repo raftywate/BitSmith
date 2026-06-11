@@ -53,6 +53,14 @@ namespace dotnetBitSmith.Middleware {
                     statusCode = HttpStatusCode.Unauthorized; // 401
                     message = ex.Message;
                     break;
+                case NotFoundException ex:
+                    statusCode = HttpStatusCode.NotFound; // 404
+                    message = ex.Message;
+                    break;
+                case NotSupportedException ex:
+                    statusCode = HttpStatusCode.BadRequest; // 400
+                    message = ex.Message;
+                    break;
             }
 
             // We log the error so we (the developer) can see it.

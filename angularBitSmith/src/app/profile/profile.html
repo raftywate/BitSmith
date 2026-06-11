@@ -1,0 +1,201 @@
+<section class="profile-page">
+  @if (isLoading()) {
+  <div class="profile-page__loading panel">
+    Loading your profile...
+  </div>
+  } @else if (profile(); as profileModel) {
+  <div class="profile-page__top">
+    <aside class="profile-card panel">
+      <div class="profile-card__avatar-wrap">
+        <button type="button" class="profile-card__avatar-button" (click)="toggleAvatarMenu()" aria-label="Edit avatar">
+          @if (profileModel.profilePictureUrl) {
+          <img class="profile-card__avatar" [src]="profileModel.profilePictureUrl" [alt]="profileModel.username" />
+          } @else {
+          <span class="profile-card__avatar avatar-fallback">{{ initials() }}</span>
+          }
+        </button>
+
+        @if (avatarMenuOpen()) {
+        <div class="avatar-menu">
+          <label class="avatar-menu__item">
+            <span>{{ profileModel.profilePictureUrl ? 'Change avatar' : 'Upload avatar' }}</span>
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" [disabled]="isUploadingAvatar()"
+              (change)="uploadAvatar($event)" />
+          </label>
+          @if (profileModel.profilePictureUrl) {
+          <button type="button" class="avatar-menu__item avatar-menu__item--danger" [disabled]="isUploadingAvatar()"
+            (click)="removeAvatar()">
+            Remove avatar
+          </button>
+          }
+        </div>
+        }
+      </div>
+
+      <span class="eyebrow">Public identity</span>
+      <h1>{{ profileModel.displayName || profileModel.username }}</h1>
+      <p class="profile-card__username">{{ profileModel.username }}</p>
+      <p class="profile-card__bio">
+        {{ profileModel.bio || 'Add a short bio so other Compylr users know how you think about problems.' }}
+      </p>
+
+      <button type="button" class="edit-capsule" (click)="startEditing()">Edit profile</button>
+
+      <p class="profile-card__meta">Joined {{ profileModel.createdAt | date: 'mediumDate' }}</p>
+      @if (avatarError()) {
+      <p class="field__error">{{ avatarError() }}</p>
+      }
+    </aside>
+
+    @if (!isEditing()) {
+    <section class="profile-editor panel profile-editor--summary">
+      <div class="profile-editor__header">
+        <span class="eyebrow">Profile</span>
+        <h2>Community presence</h2>
+        <p>Display name and bio are used in solution cards, comments, and your account profile.</p>
+      </div>
+    </section>
+    } @else {
+    <section class="profile-editor panel">
+      <div class="profile-editor__header">
+        <span class="eyebrow">Editing</span>
+        <h2>Update your profile</h2>
+        <p>Keep it concise and recognizable for community discussion.</p>
+      </div>
+
+      <form [formGroup]="profileForm" (ngSubmit)="saveProfile()" class="profile-editor__form">
+        <label class="field">
+          <span class="field__label">Display name</span>
+          <input class="input" type="text" formControlName="displayName" placeholder="How you want your name shown" />
+          <p class="field__hint">Optional, up to 100 characters.</p>
+        </label>
+
+        <label class="field">
+          <span class="field__label">Bio</span>
+          <textarea class="textarea" formControlName="bio"
+            placeholder="Share your style, focus areas, or what you're learning."></textarea>
+          <p class="field__hint">Optional, up to 500 characters.</p>
+        </label>
+
+        <div class="profile-editor__actions">
+          <button type="button" class="btn btn--ghost" (click)="cancelEditing()">Cancel</button>
+            <button type="submit" class="btn btn--primary profile-editor__save" [disabled]="isSaving()">
+              {{ isSaving() ? 'Saving profile...' : 'Save profile' }}
+            </button>
+        </div>
+      </form>
+    </section>
+    }
+  </div>
+
+  <section class="profile-stats panel">
+    <div class="profile-stats__header">
+      <div>
+        <span class="eyebrow">Progress</span>
+        <h2>Your solved stats</h2>
+      </div>
+      <strong>{{ profileModel.stats.currentStreak }} day streak</strong>
+    </div>
+
+    <div class="profile-stats__grid">
+      <article>
+        <span>Total</span>
+        <strong>{{ profileModel.stats.totalSolved }}</strong>
+      </article>
+      <article>
+        <span>Easy</span>
+        <strong>{{ profileModel.stats.easySolved }}</strong>
+      </article>
+      <article>
+        <span>Medium</span>
+        <strong>{{ profileModel.stats.mediumSolved }}</strong>
+      </article>
+      <article>
+        <span>Hard</span>
+        <strong>{{ profileModel.stats.hardSolved }}</strong>
+      </article>
+    </div>
+
+    <div class="heatmap" aria-label="Accepted submission activity over the last year">
+      @for (day of heatmapDays(); track day.date) {
+      <span class="heatmap__day" [attr.data-level]="heatmapLevel(day.count)"
+        [title]="day.count + ' accepted on ' + day.date"></span>
+      }
+    </div>
+  </section>
+
+  <section class="accepted-problems panel">
+    <div class="accepted-problems__header">
+      <div>
+        <span class="eyebrow">Accepted</span>
+        <h2>Solved problems</h2>
+      </div>
+      <span>{{ profileModel.stats.acceptedProblems.length }} accepted</span>
+    </div>
+
+    @if (!profileModel.stats.acceptedProblems.length) {
+    <div class="empty-state">Accepted problems will appear here after your first successful submission.</div>
+    } @else {
+    <div class="accepted-problems__list">
+      @for (problem of profileModel.stats.acceptedProblems; track problem.id) {
+      <a class="accepted-problem" [routerLink]="['/problems', problem.id]">
+        <span class="accepted-problem__number">#{{ problem.problemNumber }}</span>
+        <strong>{{ problem.title }}</strong>
+        <span class="difficulty-chip" [class.easy]="problem.difficulty === 'Easy'"
+          [class.medium]="problem.difficulty === 'Medium'" [class.hard]="problem.difficulty === 'Hard'">
+          {{ problem.difficulty }}
+        </span>
+        <span class="accepted-problem__date">{{ problem.acceptedAt | date: 'mediumDate' }}</span>
+      </a>
+      }
+    </div>
+    }
+  </section>
+
+  @if (avatarEditorOpen() && selectedAvatarDataUrl()) {
+  <div class="avatar-editor">
+    <section class="avatar-editor__dialog panel">
+      <div>
+        <span class="eyebrow">Avatar</span>
+        <h2>Adjust your profile image</h2>
+      </div>
+
+      <div class="avatar-editor__preview">
+        <img [src]="selectedAvatarDataUrl()" alt="Selected avatar preview"
+          [style.transform]="'translate(' + avatarOffsetX() + 'px, ' + avatarOffsetY() + 'px) rotate(' + avatarRotation() + 'deg) scale(' + avatarZoom() + ')'" />
+      </div>
+
+      <div class="avatar-editor__controls">
+        <label class="field">
+          <span class="field__label">Zoom</span>
+          <input type="range" min="1" max="3" step="0.05" [value]="avatarZoom()"
+            (input)="avatarZoom.set(+$any($event.target).value)" />
+        </label>
+        <label class="field">
+          <span class="field__label">Horizontal position</span>
+          <input type="range" min="-120" max="120" step="1" [value]="avatarOffsetX()"
+            (input)="avatarOffsetX.set(+$any($event.target).value)" />
+        </label>
+        <label class="field">
+          <span class="field__label">Vertical position</span>
+          <input type="range" min="-120" max="120" step="1" [value]="avatarOffsetY()"
+            (input)="avatarOffsetY.set(+$any($event.target).value)" />
+        </label>
+        <label class="field">
+          <span class="field__label">Rotation</span>
+          <input type="range" min="-180" max="180" step="1" [value]="avatarRotation()"
+            (input)="avatarRotation.set(+$any($event.target).value)" />
+        </label>
+      </div>
+
+      <div class="avatar-editor__actions">
+        <button type="button" class="btn btn--ghost" (click)="cancelAvatarEdit()">Cancel</button>
+        <button type="button" class="btn btn--primary" [disabled]="isUploadingAvatar()" (click)="saveAvatarEdit()">
+          {{ isUploadingAvatar() ? 'Saving avatar...' : 'Save avatar' }}
+        </button>
+      </div>
+    </section>
+  </div>
+  }
+  }
+</section>

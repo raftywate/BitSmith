@@ -3,4 +3,5 @@ export interface AuthResponse {
     userId : string;
     username : string;
     role : 'User' | 'Admin';
+    profilePictureUrl?: string | null;
 }

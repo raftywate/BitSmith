@@ -21,7 +21,7 @@ namespace dotnetBitSmith.Services {
 
             var solutionExists = await _context.Solutions.AnyAsync(s => s.Id == model.SolutionId);
             if (!solutionExists) {
-                throw new NotFoundException("Solution with Id {model.SolutionId} not found");
+                throw new NotFoundException("Solution with ID " + model.SolutionId + " not found.");
             }
 
             if (model.ParentCommentId.HasValue) {

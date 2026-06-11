@@ -10,6 +10,12 @@ namespace dotnetBitSmith.Models.Submissions {
         public SubmissionStatus Status { get; set; }
         public int? ExecutionTimeMs { get; set; }
         public int? ExecutionMemoryKb { get; set; }
+        public string? ErrorMessage { get; set; }
         public DateTime CreatedAt { get; set; }
+        public int PassedCount { get; set; }
+        public int TotalCount { get; set; }
+        public string? FailedTestCaseInput { get; set; }
+        public string? FailedTestCaseExpected { get; set; }
+        public string? FailedTestCaseActual { get; set; }
     }
 }

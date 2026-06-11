@@ -1,23 +1,1604 @@
-import { Component, inject } from '@angular/core';
-import { AsyncPipe, NgIf } from '@angular/common';
-import { ActivatedRoute, RouterModule } from '@angular/router';
+import { CommonModule } from '@angular/common';
+import { Component, computed, DestroyRef, HostListener, inject, signal, OnDestroy, effect } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { FormBuilder, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
+import { AngularSplitModule, SplitGutterInteractionEvent } from 'angular-split';
+import { MonacoEditorModule } from 'ngx-monaco-editor-v2';
+import { SkeletonComponent } from '../../components/skeleton/skeleton';
+import {
+  CommentViewModel,
+  SolutionDetail,
+  SolutionSummary,
+  VoteChoice
+} from '../../models/community';
+import { ProblemDetail, SampleTestCase } from '../../models/problem-detail';
+import { ProblemDifficulty } from '../../models/problem-difficulty.enum';
+import {
+  EDITOR_LANGUAGE_OPTIONS,
+  EditorLanguage,
+  SampleRunResult,
+  SubmissionDetail,
+  SubmissionResult,
+  SubmissionStatus
+} from '../../models/submission';
+import { AuthService } from '../../services/auth';
+import { CommunityService } from '../../services/community';
 import { ProblemService } from '../../services/problem';
-import { switchMap } from 'rxjs';
+import { SubmissionService } from '../../services/submission';
+import { ThemeService } from '../../services/theme';
+import { ToastService } from '../../services/toast';
+import { UserService } from '../../services/user';
+import { WorkspaceActionService } from '../../services/workspace-action';
+import { UserPreferencesUpdateRequest } from '../../models/user-profile';
+import { getApiErrorMessage } from '../../utils/api-error';
+import { MarkdownRenderPipe } from '../../pipes/markdown-render.pipe';
+
+type InfoPanelId = 'description' | 'solutions' | 'submissions';
+type WorkPanelId = 'editor' | 'result' | 'tests' | 'history';
+type DockPanelId = InfoPanelId | WorkPanelId;
+type DockZoneId = 'leftTop' | 'leftBottom' | 'rightTop' | 'rightBottom';
+type DockColumnId = 'left' | 'right';
+type EditorThemeChoice = 'system' | 'light' | 'dark' | 'contrast';
+
+interface SolutionUiModel extends SolutionSummary {
+  detail: SolutionDetail | null;
+  isExpanded: boolean;
+  isDetailLoading: boolean;
+  comments: CommentViewModel[];
+  commentsPage: number;
+  hasMoreComments: boolean;
+  isCommentsLoading: boolean;
+  userVote: VoteChoice;
+}
+
+interface DockPanelDefinition {
+  id: DockPanelId;
+  label: string;
+  description: string;
+}
+
+interface DockZoneState {
+  tabs: DockPanelId[];
+  activeTab: DockPanelId | null;
+}
+
+interface DockDropState {
+  mode: 'zone' | 'below';
+  targetId: DockZoneId | DockColumnId;
+}
 
 @Component({
-  standalone: true,
   selector: 'app-problem-detail',
-  templateUrl: './problem-detail.html',
   imports: [
-    AsyncPipe,        
-    RouterModule
-  ]
+    CommonModule,
+    FormsModule,
+    ReactiveFormsModule,
+    RouterModule,
+    AngularSplitModule,
+    MonacoEditorModule,
+    SkeletonComponent,
+    MarkdownRenderPipe
+  ],
+  templateUrl: './problem-detail.html',
+  styleUrl: './problem-detail.scss'
 })
-export class ProblemDetail {
-  private route = inject(ActivatedRoute);
-  private problemService = inject(ProblemService);
+export class ProblemDetailComponent implements OnDestroy {
+  protected readonly ProblemDifficulty = ProblemDifficulty;
+  protected readonly editorLanguages = EDITOR_LANGUAGE_OPTIONS;
 
-  problem$ = this.route.paramMap.pipe(
-    switchMap(params => this.problemService.getProblemById(params.get('id')!))
-  );
+  private readonly commentsPageSize = 5;
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly fb = inject(FormBuilder);
+  private readonly problemService = inject(ProblemService);
+  private readonly communityService = inject(CommunityService);
+  private readonly submissionService = inject(SubmissionService);
+  protected readonly authService = inject(AuthService);
+  private readonly themeService = inject(ThemeService);
+  private readonly toastService = inject(ToastService);
+  private readonly userService = inject(UserService);
+  private readonly workspaceActionService = inject(WorkspaceActionService);
+
+  readonly editorFontSize = signal<number>(this.getInitialEditorFontSize());
+  readonly editorTabSize = signal<number>(this.getInitialEditorTabSize());
+  readonly editorFontFamily = signal<string>(this.getInitialEditorFontFamily());
+  readonly editorSettingsOpen = signal(false);
+  private editorInstance: any = null;
+
+  readonly mainSplitSizesHorizontal = signal<number[]>(this.getInitialMainSplitSizesHorizontal());
+  readonly mainSplitSizesVertical = signal<number[]>(this.getInitialMainSplitSizesVertical());
+  readonly leftSplitSizes = signal<number[]>(this.getInitialLeftSplitSizes());
+  readonly rightSplitSizes = signal<number[]>(this.getInitialRightSplitSizes());
+  readonly selectedSubmission = signal<SubmissionDetail | null>(null);
+
+  readonly problem = signal<ProblemDetail | null>(null);
+  readonly problemId = signal<string | null>(null);
+  readonly problemError = signal<string | null>(null);
+  readonly isLoadingProblem = signal(true);
+  readonly topicsOpen = signal(false);
+
+  toggleTopics() {
+    this.topicsOpen.update(v => !v);
+  }
+
+  scrollToHints() {
+    const el = document.getElementById('hints-section');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  readonly dockPanelDefinitions: ReadonlyArray<DockPanelDefinition> = [
+    {
+      id: 'description',
+      label: 'Description',
+      description: 'Read the prompt, examples, and constraints.'
+    },
+    {
+      id: 'solutions',
+      label: 'Solutions',
+      description: 'Browse community write-ups, votes, and threaded discussion.'
+    },
+    {
+      id: 'submissions',
+      label: 'Submissions',
+      description: 'Review your personal attempts for this problem.'
+    },
+    {
+      id: 'editor',
+      label: 'Code',
+      description: 'Write and edit your solution in Monaco.'
+    },
+    {
+      id: 'tests',
+      label: 'Test Cases',
+      description: 'Inspect sample cases and compare expected and actual output.'
+    },
+    {
+      id: 'result',
+      label: 'Test Result',
+      description: 'See the latest judge result for your submission.'
+    }
+  ];
+
+  readonly dockZones = signal<Record<DockZoneId, DockZoneState>>(this.getInitialDockZones());
+  readonly draggedDockPanel = signal<DockPanelId | null>(null);
+  readonly dockDropTarget = signal<DockDropState | null>(null);
+  readonly fullscreenZoneId = signal<DockZoneId | null>(null);
+  readonly isCompactWorkspace = signal(this.readIsCompactWorkspace());
+  readonly mainSplitDirection = computed(() => (this.isCompactWorkspace() ? 'vertical' : 'horizontal'));
+
+  readonly editorLanguage = signal<EditorLanguage>(this.getInitialLanguage());
+  readonly editorTheme = signal<EditorThemeChoice>(this.getInitialEditorTheme());
+  readonly isEditorFullscreen = signal(false);
+  readonly code = signal('');
+  readonly isSubmitting = signal(false);
+  readonly isRunningSamples = signal(false);
+  readonly editorThemeOptions: Array<{ value: EditorThemeChoice; label: string }> = [
+    { value: 'system', label: 'System' },
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' },
+    { value: 'contrast', label: 'High contrast' }
+  ];
+
+  readonly solutions = signal<SolutionUiModel[]>([]);
+  readonly isLoadingSolutions = signal(false);
+  readonly solutionComposerOpen = signal(false);
+
+  readonly submissions = signal<SubmissionDetail[]>([]);
+  readonly isLoadingSubmissions = signal(false);
+  readonly lastSubmission = signal<SubmissionResult | SubmissionDetail | null>(null);
+  readonly sampleRunResults = signal<SampleRunResult[]>([]);
+  readonly selectedSampleIndex = signal(0);
+
+  readonly rootCommentDrafts = signal<Record<string, string>>({});
+  readonly replyDrafts = signal<Record<string, string>>({});
+  readonly openReplyComposers = signal<Record<string, boolean>>({});
+  readonly pendingCommentTargets = signal<Record<string, boolean>>({});
+  readonly pendingVoteTargets = signal<Record<string, boolean>>({});
+
+  readonly solutionForm = this.fb.nonNullable.group({
+    title: ['', [Validators.required, Validators.minLength(10), Validators.maxLength(100)]],
+    content: ['', [Validators.required, Validators.minLength(50), Validators.maxLength(10000)]]
+  });
+
+  readonly editorOptions = computed(() => {
+    const languageOption =
+      this.editorLanguages.find(option => option.value === this.editorLanguage()) ??
+      this.editorLanguages[0];
+
+    const fontMap: Record<string, string> = {
+      'IBM Plex Mono': '"IBM Plex Mono", Consolas, Monaco, monospace',
+      'Cascadia': '"Cascadia Code", Consolas, Monaco, monospace',
+      'Fira Code': '"Fira Code", Consolas, Monaco, monospace'
+    };
+
+    return {
+      theme: this.getMonacoTheme(),
+      language: languageOption.monacoLanguage,
+      automaticLayout: true,
+      minimap: { enabled: false },
+      fontFamily: fontMap[this.editorFontFamily()] ?? '"IBM Plex Mono", Consolas, Monaco, monospace',
+      fontSize: this.editorFontSize(),
+      tabSize: this.editorTabSize(),
+      insertSpaces: true,
+      scrollBeyondLastLine: false,
+      lineNumbersMinChars: 3,
+      roundedSelection: false,
+      padding: { top: 18, bottom: 18 }
+    };
+  });
+
+  readonly latestSubmission = computed(() => this.lastSubmission() ?? this.submissions()[0] ?? null);
+
+  constructor() {
+    this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
+      const id = params.get('id');
+
+      if (!id) {
+        return;
+      }
+
+      this.loadProblem(id);
+    });
+
+    this.loadUserPreferences();
+
+    // Sync active workspace state
+    this.workspaceActionService.hasWorkspaceActive.set(true);
+
+    // Sync isRunningSamples & isSubmitting signals from component to service
+    effect(() => {
+      this.workspaceActionService.isRunningSamples.set(this.isRunningSamples());
+    });
+    effect(() => {
+      this.workspaceActionService.isSubmitting.set(this.isSubmitting());
+    });
+
+    // Listen to header events
+    this.workspaceActionService.runSamplesRequest$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.runSampleTests();
+      });
+
+    this.workspaceActionService.submitRequest$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.submitCode();
+      });
+  }
+
+  @HostListener('window:resize')
+  onWindowResize() {
+    this.isCompactWorkspace.set(this.readIsCompactWorkspace());
+  }
+
+  ngOnDestroy() {
+    this.workspaceActionService.hasWorkspaceActive.set(false);
+  }
+
+  onEditorInit(editor: any) {
+    this.editorInstance = editor;
+  }
+
+  formatCode() {
+    if (this.editorInstance) {
+      this.editorInstance.trigger('editor', 'editor.action.formatDocument', null);
+    }
+  }
+
+  toggleEditorSettings(event: Event) {
+    event.stopPropagation();
+    this.editorSettingsOpen.update(open => !open);
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: Event) {
+    const clickedInside = (event.target as HTMLElement).closest('.editor-settings-container');
+    if (!clickedInside) {
+      this.editorSettingsOpen.set(false);
+    }
+  }
+
+  dockTabLabel(panelId: DockPanelId) {
+    return this.dockPanelDefinitions.find(panel => panel.id === panelId)?.label ?? panelId;
+  }
+
+  zoneTabs(zoneId: DockZoneId) {
+    return this.dockZones()[zoneId].tabs;
+  }
+
+  zoneActiveTab(zoneId: DockZoneId) {
+    return this.dockZones()[zoneId].activeTab;
+  }
+
+  setZoneActiveTab(zoneId: DockZoneId, panelId: DockPanelId) {
+    this.dockZones.update(current => {
+      const updated = {
+        ...current,
+        [zoneId]: {
+          ...current[zoneId],
+          activeTab: panelId
+        }
+      };
+      this.saveLayoutState(updated);
+      return updated;
+    });
+    this.activateDockPanel(panelId);
+  }
+
+  startDockDrag(event: DragEvent, panelId: DockPanelId) {
+    if (!event.dataTransfer) {
+      return;
+    }
+
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', panelId);
+    this.draggedDockPanel.set(panelId);
+    this.dockDropTarget.set(null);
+  }
+
+  handleDockDragEnd() {
+    this.draggedDockPanel.set(null);
+    this.dockDropTarget.set(null);
+  }
+
+  allowZoneDrop(event: DragEvent, zoneId: DockZoneId) {
+    if (!this.draggedDockPanel()) {
+      return;
+    }
+
+    event.preventDefault();
+    this.dockDropTarget.set({
+      mode: 'zone',
+      targetId: zoneId
+    });
+  }
+
+  allowBelowDrop(event: DragEvent, columnId: DockColumnId) {
+    if (!this.draggedDockPanel()) {
+      return;
+    }
+
+    event.preventDefault();
+    this.dockDropTarget.set({
+      mode: 'below',
+      targetId: columnId
+    });
+  }
+
+  handleZoneDrop(event: DragEvent, zoneId: DockZoneId) {
+    event.preventDefault();
+
+    const panelId = this.draggedDockPanel();
+    if (!panelId) {
+      return;
+    }
+
+    this.movePanelToZone(panelId, zoneId);
+    this.handleDockDragEnd();
+  }
+
+  handleBelowDrop(event: DragEvent, columnId: DockColumnId) {
+    event.preventDefault();
+
+    const panelId = this.draggedDockPanel();
+    if (!panelId) {
+      return;
+    }
+
+    this.movePanelToZone(panelId, this.bottomZoneId(columnId));
+    this.handleDockDragEnd();
+  }
+
+  isZoneDropTarget(zoneId: DockZoneId) {
+    const target = this.dockDropTarget();
+    return !!target && target.mode === 'zone' && target.targetId === zoneId;
+  }
+
+  isBelowDropTarget(columnId: DockColumnId) {
+    const target = this.dockDropTarget();
+    return !!target && target.mode === 'below' && target.targetId === columnId;
+  }
+
+  openDockPanel(panelId: DockPanelId) {
+    const zoneId = this.findPanelZone(panelId);
+    if (!zoneId) {
+      return;
+    }
+
+    this.setZoneActiveTab(zoneId, panelId);
+  }
+
+  resetDockLayout() {
+    const defaultZones = this.createDefaultDockZones();
+    this.dockZones.set(defaultZones);
+    this.saveLayoutState(defaultZones);
+    this.mainSplitSizesHorizontal.set([46, 54]);
+    this.mainSplitSizesVertical.set([50, 50]);
+    this.leftSplitSizes.set([62, 38]);
+    this.rightSplitSizes.set([60, 40]);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('compylr.mainSplitSizesHorizontal');
+      localStorage.removeItem('compylr.mainSplitSizesVertical');
+      localStorage.removeItem('compylr.leftSplitSizes');
+      localStorage.removeItem('compylr.rightSplitSizes');
+    }
+    this.fullscreenZoneId.set(null);
+    this.handleDockDragEnd();
+  }
+
+  columnHasBottomZone(columnId: DockColumnId) {
+    return this.zoneTabs(this.bottomZoneId(columnId)).length > 0;
+  }
+
+  zoneHasTabs(zoneId: DockZoneId) {
+    return this.zoneTabs(zoneId).length > 0;
+  }
+
+  topZoneId(columnId: DockColumnId): DockZoneId {
+    return columnId === 'left' ? 'leftTop' : 'rightTop';
+  }
+
+  bottomZoneId(columnId: DockColumnId): DockZoneId {
+    return columnId === 'left' ? 'leftBottom' : 'rightBottom';
+  }
+
+  isZoneFullscreen(zoneId: DockZoneId) {
+    return this.fullscreenZoneId() === zoneId;
+  }
+
+  toggleZoneFullscreen(zoneId: DockZoneId) {
+    this.fullscreenZoneId.update(current => (current === zoneId ? null : zoneId));
+  }
+
+  setSampleIndex(index: number) {
+    this.selectedSampleIndex.set(index);
+  }
+
+  inputParts(testCase: Pick<SampleTestCase, 'input' | 'inputLabels'>) {
+    const values = (testCase.input ?? '').split(/\r?\n/);
+    const labels = testCase.inputLabels ?? [];
+
+    return values.map((value, index) => ({
+      label: labels[index]?.trim() || `Input ${index + 1}`,
+      value
+    }));
+  }
+
+  setEditorLanguage(language: EditorLanguage) {
+    if (this.editorLanguage() === language) {
+      return;
+    }
+
+    this.editorLanguage.set(language);
+    this.code.set(this.getStarterCode());
+
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('compylr.preferredLanguage', language);
+    }
+    if (this.authService.isLoggedIn$()) {
+      this.userService.updateMyPreferences({ preferredLanguage: language }).subscribe({
+        error: err => console.error('Failed to update preferred language on backend:', err)
+      });
+    }
+  }
+
+  setEditorTheme(theme: EditorThemeChoice) {
+    this.editorTheme.set(theme);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('compylr.editorTheme', theme);
+    }
+  }
+
+  setEditorFontSize(size: number) {
+    this.editorFontSize.set(size);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('compylr.editorFontSize', String(size));
+    }
+  }
+
+  setEditorFontFamily(family: string) {
+    this.editorFontFamily.set(family);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('compylr.editorFontFamily', family);
+    }
+  }
+
+  setEditorTabSize(size: number) {
+    this.editorTabSize.set(size);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('compylr.editorTabSize', String(size));
+    }
+  }
+
+  toggleEditorFullscreen() {
+    this.isEditorFullscreen.update(value => !value);
+  }
+
+  loadProblem(problemId: string) {
+    this.problemId.set(problemId);
+    this.problem.set(null);
+    this.problemError.set(null);
+    this.isLoadingProblem.set(true);
+    this.solutions.set([]);
+    this.submissions.set([]);
+    this.lastSubmission.set(null);
+    this.sampleRunResults.set([]);
+    this.selectedSampleIndex.set(0);
+    this.solutionComposerOpen.set(false);
+    this.rootCommentDrafts.set({});
+    this.replyDrafts.set({});
+    this.openReplyComposers.set({});
+
+    this.problemService.getProblemById(problemId).subscribe({
+      next: problem => {
+        if (typeof localStorage !== 'undefined') {
+          const storedCustom = localStorage.getItem(`compylr.customTestCases.${problemId}`);
+          if (storedCustom) {
+            try {
+              const customCases: SampleTestCase[] = JSON.parse(storedCustom);
+              problem.sampleTestCases = [...problem.sampleTestCases, ...customCases];
+            } catch (e) {
+              console.error('Failed to parse custom test cases', e);
+            }
+          }
+        }
+        this.problem.set(problem);
+        this.code.set(this.getStarterCode());
+        this.isLoadingProblem.set(false);
+      },
+      error: error => {
+        const message = getApiErrorMessage(error, 'Unable to load this problem right now.');
+        this.problemError.set(message);
+        this.toastService.error(message);
+        this.isLoadingProblem.set(false);
+      }
+    });
+  }
+
+  copyToClipboard(text: string) {
+    if (!text) return;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        this.toastService.success('Copied to clipboard!');
+      }).catch(err => {
+        console.error('Failed to copy: ', err);
+      });
+    } else {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        this.toastService.success('Copied to clipboard!');
+      } catch (err) {
+        console.error('Fallback: Unable to copy', err);
+      }
+      document.body.removeChild(textArea);
+    }
+  }
+
+  runSampleTests() {
+    const problem = this.problem();
+    if (!problem) {
+      return;
+    }
+
+    if (!this.ensureAuthenticated('Sign in to run code against sample test cases.')) {
+      return;
+    }
+
+    if (!problem.sampleTestCases?.length) {
+      this.toastService.info('This problem does not include sample test cases yet.');
+      this.openDockPanel('tests');
+      return;
+    }
+
+    if (!this.code().trim()) {
+      this.toastService.warning('Add some code before running sample tests.');
+      return;
+    }
+
+    this.isRunningSamples.set(true);
+    this.openDockPanel('tests');
+
+    this.submissionService
+      .runSampleTests({
+        problemId: problem.id,
+        language: this.editorLanguage(),
+        code: this.code()
+      })
+      .subscribe({
+        next: results => {
+          this.sampleRunResults.set(results);
+          this.selectedSampleIndex.set(0);
+          const passed = results.filter(result => result.passed).length;
+          this.toastService.success(`Sample run finished: ${passed}/${results.length} passed.`);
+        },
+        error: error => {
+          this.toastService.error(getApiErrorMessage(error, 'Unable to run sample tests right now.'));
+          this.isRunningSamples.set(false);
+        },
+        complete: () => this.isRunningSamples.set(false)
+      });
+  }
+
+  resetCode() {
+    this.code.set(this.getStarterCode());
+  }
+
+  addFailedTestCaseToRunner(input: string, expected: string) {
+    const currentProblem = this.problem();
+    if (!currentProblem) return;
+
+    const exists = currentProblem.sampleTestCases.some(tc => tc.input === input);
+    if (exists) {
+      this.toastService.info('This test case is already in your Test Cases tab.');
+      return;
+    }
+
+    const newTestCase: SampleTestCase = {
+      id: `custom_${Date.now()}`,
+      input,
+      inputLabels: [],
+      isHidden: false,
+      expectedOutput: expected
+    };
+
+    if (typeof localStorage !== 'undefined') {
+      const key = `compylr.customTestCases.${currentProblem.id}`;
+      const stored = localStorage.getItem(key);
+      let customCases: SampleTestCase[] = [];
+      if (stored) {
+        try { customCases = JSON.parse(stored); } catch (e) {}
+      }
+      customCases.push(newTestCase);
+      localStorage.setItem(key, JSON.stringify(customCases));
+    }
+
+    this.problem.update(current => {
+      if (!current) return current;
+      const updatedTestCases = [...current.sampleTestCases, newTestCase];
+      
+      this.toastService.success('Failed test case added to Test Cases tab!');
+      
+      setTimeout(() => {
+        this.openDockPanel('tests');
+        this.selectedSampleIndex.set(updatedTestCases.length - 1);
+      }, 50);
+
+      return {
+        ...current,
+        sampleTestCases: updatedTestCases
+      };
+    });
+  }
+
+  updateCode(value: string) {
+    this.code.set(value || '');
+  }
+
+  submitCode() {
+    const problem = this.problem();
+    if (!problem) {
+      return;
+    }
+
+    if (!this.ensureAuthenticated('Sign in to submit code and keep your history.')) {
+      return;
+    }
+
+    if (!this.code().trim()) {
+      this.toastService.warning('Add some code before you submit.');
+      return;
+    }
+
+    this.isSubmitting.set(true);
+
+    this.submissionService
+      .createSubmission({
+        problemId: problem.id,
+        language: this.editorLanguage(),
+        code: this.code()
+      })
+      .subscribe({
+        next: result => {
+          this.lastSubmission.set(result);
+          if (result.status === 'Accepted') {
+            this.loadSubmissionsAndSelectFirst();
+          } else {
+            this.openDockPanel('result');
+            this.loadSubmissions(true);
+          }
+          this.toastService.success(`Submission finished with status: ${this.formatStatus(result.status)}.`);
+        },
+        error: error => {
+          this.toastService.error(getApiErrorMessage(error, 'Unable to submit code right now.'));
+          this.isSubmitting.set(false);
+        },
+        complete: () => this.isSubmitting.set(false)
+      });
+  }
+
+  loadSubmissions(force = false) {
+    const problemId = this.problemId();
+    if (!problemId || !this.authService.isLoggedIn$()) {
+      return;
+    }
+
+    if (this.isLoadingSubmissions() || (this.submissions().length && !force)) {
+      return;
+    }
+
+    this.isLoadingSubmissions.set(true);
+    this.submissionService.getMySubmissionsForProblem(problemId).subscribe({
+      next: submissions => {
+        this.submissions.set(submissions);
+
+        if (!this.lastSubmission() && submissions.length > 0) {
+          this.lastSubmission.set(submissions[0]);
+        }
+
+        this.isLoadingSubmissions.set(false);
+      },
+      error: error => {
+        this.toastService.error(getApiErrorMessage(error, 'Unable to load your submissions.'));
+        this.isLoadingSubmissions.set(false);
+      }
+    });
+  }
+
+  viewSubmissionDetail(submission: SubmissionDetail) {
+    this.selectedSubmission.set(submission);
+  }
+
+  clearSelectedSubmission() {
+    this.selectedSubmission.set(null);
+  }
+
+  copyCodeToEditor(code: string, language: string) {
+    this.code.set(code);
+    this.openDockPanel('editor');
+    
+    const normalized = language.trim().toLowerCase().replace('sharp', 'sharp');
+    let langChoice: EditorLanguage = 'csharp';
+    if (normalized === 'python' || normalized === 'py') langChoice = 'python';
+    else if (normalized === 'java') langChoice = 'java';
+    else if (normalized === 'cpp' || normalized === 'c++') langChoice = 'cpp';
+    else if (normalized === 'c') langChoice = 'c';
+    
+    this.setEditorLanguage(langChoice);
+    this.toastService.success('Code loaded into editor!');
+  }
+
+  loadSubmissionsAndSelectFirst() {
+    const problemId = this.problemId();
+    if (!problemId) return;
+    
+    this.isLoadingSubmissions.set(true);
+    this.submissionService.getMySubmissionsForProblem(problemId).subscribe({
+      next: submissions => {
+        this.submissions.set(submissions);
+        if (submissions.length > 0) {
+          this.selectedSubmission.set(submissions[0]);
+          this.openDockPanel('submissions');
+        }
+        this.isLoadingSubmissions.set(false);
+      },
+      error: error => {
+        this.toastService.error(getApiErrorMessage(error, 'Unable to load your submissions.'));
+        this.isLoadingSubmissions.set(false);
+      }
+    });
+  }
+
+  loadSolutions(force = false) {
+    const problemId = this.problemId();
+    if (!problemId) {
+      return;
+    }
+
+    if (this.isLoadingSolutions() || (this.solutions().length && !force)) {
+      return;
+    }
+
+    this.isLoadingSolutions.set(true);
+    this.communityService.getSolutionsForProblem(problemId).subscribe({
+      next: solutions => {
+        this.solutions.set(solutions.map(solution => this.toSolutionUiModel(solution)));
+        this.isLoadingSolutions.set(false);
+      },
+      error: error => {
+        this.toastService.error(getApiErrorMessage(error, 'Unable to load community solutions.'));
+        this.isLoadingSolutions.set(false);
+      }
+    });
+  }
+
+  toggleSolutionComposer() {
+    if (!this.ensureAuthenticated('Sign in to publish your own solution write-up.')) {
+      return;
+    }
+
+    this.openDockPanel('solutions');
+    this.solutionComposerOpen.update(value => !value);
+  }
+
+  publishSolution() {
+    const problem = this.problem();
+    if (!problem) {
+      return;
+    }
+
+    if (!this.ensureAuthenticated('Sign in to publish your own solution write-up.')) {
+      return;
+    }
+
+    if (this.solutionForm.invalid) {
+      this.solutionForm.markAllAsTouched();
+      return;
+    }
+
+    const payload = this.solutionForm.getRawValue();
+
+    this.communityService
+      .createSolution({
+        problemId: problem.id,
+        title: payload.title,
+        content: payload.content
+      })
+      .subscribe({
+        next: summary => {
+          const solution: SolutionUiModel = {
+            ...this.toSolutionUiModel(summary),
+            detail: {
+              ...summary,
+              content: payload.content
+            },
+            isExpanded: true
+          };
+
+          this.solutions.update(current => [solution, ...current]);
+          this.solutionForm.reset({
+            title: '',
+            content: ''
+          });
+          this.solutionComposerOpen.set(false);
+          this.toastService.success('Your solution is live.');
+        },
+        error: error => {
+          this.toastService.error(getApiErrorMessage(error, 'Unable to publish your solution.'));
+        }
+      });
+  }
+
+  toggleSolution(solutionId: string) {
+    const solution = this.solutions().find(item => item.id === solutionId);
+    if (!solution) {
+      return;
+    }
+
+    const willExpand = !solution.isExpanded;
+    this.patchSolution(solutionId, current => ({ ...current, isExpanded: willExpand }));
+
+    if (willExpand) {
+      if (!solution.detail) {
+        this.loadSolutionDetail(solutionId);
+      }
+
+      if (!solution.comments.length) {
+        this.loadComments(solutionId, 1, false);
+      }
+    }
+  }
+
+  loadSolutionDetail(solutionId: string) {
+    this.patchSolution(solutionId, current => ({ ...current, isDetailLoading: true }));
+
+    this.communityService.getSolutionById(solutionId).subscribe({
+      next: detail => {
+        this.patchSolution(solutionId, current => ({
+          ...current,
+          detail,
+          title: detail.title,
+          excerpt: detail.excerpt,
+          voteCount: detail.voteCount,
+          commentCount: detail.commentCount,
+          isDetailLoading: false
+        }));
+      },
+      error: error => {
+        this.patchSolution(solutionId, current => ({ ...current, isDetailLoading: false }));
+        this.toastService.error(getApiErrorMessage(error, 'Unable to open this solution.'));
+      }
+    });
+  }
+
+  loadComments(solutionId: string, pageNumber: number, append: boolean) {
+    this.patchSolution(solutionId, current => ({ ...current, isCommentsLoading: true }));
+
+    this.communityService.getCommentsForSolution(solutionId, pageNumber, this.commentsPageSize).subscribe({
+      next: comments => {
+        this.patchSolution(solutionId, current => ({
+          ...current,
+          comments: append ? [...current.comments, ...comments] : comments,
+          commentsPage: pageNumber,
+          hasMoreComments: comments.length === this.commentsPageSize,
+          isCommentsLoading: false
+        }));
+      },
+      error: error => {
+        this.patchSolution(solutionId, current => ({ ...current, isCommentsLoading: false }));
+        this.toastService.error(getApiErrorMessage(error, 'Unable to load comments right now.'));
+      }
+    });
+  }
+
+  loadMoreComments(solutionId: string) {
+    const solution = this.solutions().find(item => item.id === solutionId);
+    if (!solution || !solution.hasMoreComments) {
+      return;
+    }
+
+    this.loadComments(solutionId, solution.commentsPage + 1, true);
+  }
+
+  rootCommentDraft(solutionId: string) {
+    return this.rootCommentDrafts()[solutionId] ?? '';
+  }
+
+  setRootCommentDraft(solutionId: string, value: string) {
+    this.rootCommentDrafts.update(current => ({ ...current, [solutionId]: value }));
+  }
+
+  replyDraft(commentId: string) {
+    return this.replyDrafts()[commentId] ?? '';
+  }
+
+  setReplyDraft(commentId: string, value: string) {
+    this.replyDrafts.update(current => ({ ...current, [commentId]: value }));
+  }
+
+  isReplyComposerOpen(commentId: string) {
+    return !!this.openReplyComposers()[commentId];
+  }
+
+  toggleReplyComposer(commentId: string) {
+    if (!this.ensureAuthenticated('Sign in to reply to the discussion.')) {
+      return;
+    }
+
+    this.openReplyComposers.update(current => ({ ...current, [commentId]: !current[commentId] }));
+  }
+
+  postRootComment(solutionId: string) {
+    this.publishComment(solutionId, null, this.rootCommentDraft(solutionId));
+  }
+
+  postReply(solutionId: string, parentCommentId: string) {
+    this.publishComment(solutionId, parentCommentId, this.replyDraft(parentCommentId));
+  }
+
+  voteOnSolution(solutionId: string, isUpvote: boolean) {
+    if (!this.ensureAuthenticated('Sign in to vote on solutions and comments.')) {
+      return;
+    }
+
+    const pendingKey = this.voteKey('solution', solutionId);
+    if (this.pendingVoteTargets()[pendingKey]) {
+      return;
+    }
+
+    const currentVote = this.solutions().find(solution => solution.id === solutionId)?.userVote ?? null;
+    this.setPendingState(this.pendingVoteTargets, pendingKey, true);
+
+    this.communityService
+      .castVote({
+        entityId: solutionId,
+        entityType: 'Solution',
+        isUpvote
+      })
+      .subscribe({
+        next: voteCount => {
+          const nextVote = currentVote === (isUpvote ? 'up' : 'down') ? null : isUpvote ? 'up' : 'down';
+          this.patchSolution(solutionId, solution => ({
+            ...solution,
+            voteCount,
+            userVote: nextVote,
+            detail: solution.detail ? { ...solution.detail, voteCount } : null
+          }));
+        },
+        error: error => {
+          this.toastService.error(getApiErrorMessage(error, 'Unable to record your vote.'));
+        },
+        complete: () => this.setPendingState(this.pendingVoteTargets, pendingKey, false)
+      });
+  }
+
+  voteOnComment(solutionId: string, commentId: string, isUpvote: boolean) {
+    if (!this.ensureAuthenticated('Sign in to vote on solutions and comments.')) {
+      return;
+    }
+
+    const pendingKey = this.voteKey('comment', commentId);
+    if (this.pendingVoteTargets()[pendingKey]) {
+      return;
+    }
+
+    const currentVote = this.findCommentVote(solutionId, commentId);
+    this.setPendingState(this.pendingVoteTargets, pendingKey, true);
+
+    this.communityService
+      .castVote({
+        entityId: commentId,
+        entityType: 'Comment',
+        isUpvote
+      })
+      .subscribe({
+        next: voteCount => {
+          const nextVote = currentVote === (isUpvote ? 'up' : 'down') ? null : isUpvote ? 'up' : 'down';
+
+          this.patchSolution(solutionId, solution => ({
+            ...solution,
+            comments: this.updateCommentTree(solution.comments, commentId, comment => ({
+              ...comment,
+              voteCount,
+              userVote: nextVote
+            }))
+          }));
+        },
+        error: error => {
+          this.toastService.error(getApiErrorMessage(error, 'Unable to record your vote.'));
+        },
+        complete: () => this.setPendingState(this.pendingVoteTargets, pendingKey, false)
+      });
+  }
+
+  voteKey(scope: 'solution' | 'comment', id: string) {
+    return `${scope}:${id}`;
+  }
+
+  formatStatus(status: SubmissionStatus | string) {
+    return status.replace(/([A-Z])/g, ' $1').trim();
+  }
+
+  formatRelativeTime(value: string) {
+    const timestamp = new Date(value).getTime();
+    const now = Date.now();
+    const diff = Math.round((timestamp - now) / 1000);
+    const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+
+    const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
+      ['day', 60 * 60 * 24],
+      ['hour', 60 * 60],
+      ['minute', 60],
+      ['second', 1]
+    ];
+
+    for (const [unit, seconds] of units) {
+      if (Math.abs(diff) >= seconds || unit === 'second') {
+        return formatter.format(Math.round(diff / seconds), unit);
+      }
+    }
+
+    return formatter.format(0, 'second');
+  }
+
+  goToLogin() {
+    void this.router.navigate(['/login'], {
+      queryParams: { redirect: this.router.url }
+    });
+  }
+
+  submissionSummary(submission: SubmissionResult | SubmissionDetail | null) {
+    if (!submission) {
+      return 'Submit your code to see the result here.';
+    }
+
+    if ('executionTimeMs' in submission && submission.executionTimeMs != null) {
+      return `${this.formatStatus(submission.status)} in ${submission.executionTimeMs}ms`;
+    }
+
+    return this.formatStatus(submission.status);
+  }
+
+  private publishComment(solutionId: string, parentCommentId: string | null, content: string) {
+    if (!this.ensureAuthenticated('Sign in to join the discussion.')) {
+      return;
+    }
+
+    const trimmedContent = content.trim();
+    if (!trimmedContent) {
+      this.toastService.warning('Write a comment before posting it.');
+      return;
+    }
+
+    const pendingKey = parentCommentId ? `comment:${parentCommentId}` : `solution:${solutionId}`;
+    if (this.pendingCommentTargets()[pendingKey]) {
+      return;
+    }
+
+    this.setPendingState(this.pendingCommentTargets, pendingKey, true);
+
+    this.communityService
+      .createComment({
+        solutionId,
+        parentCommentId,
+        content: trimmedContent
+      })
+      .subscribe({
+        next: comment => {
+          this.patchSolution(solutionId, solution => {
+            const nextComments = parentCommentId
+              ? this.appendReply(solution.comments, parentCommentId, comment)
+              : [comment, ...solution.comments];
+
+            return {
+              ...solution,
+              comments: nextComments,
+              commentCount: solution.commentCount + 1,
+              detail: solution.detail
+                ? {
+                    ...solution.detail,
+                    commentCount: solution.detail.commentCount + 1
+                  }
+                : null
+            };
+          });
+
+          if (parentCommentId) {
+            this.replyDrafts.update(current => ({ ...current, [parentCommentId]: '' }));
+            this.openReplyComposers.update(current => ({ ...current, [parentCommentId]: false }));
+          } else {
+            this.rootCommentDrafts.update(current => ({ ...current, [solutionId]: '' }));
+          }
+        },
+        error: error => {
+          this.toastService.error(getApiErrorMessage(error, 'Unable to publish your comment.'));
+        },
+        complete: () => this.setPendingState(this.pendingCommentTargets, pendingKey, false)
+      });
+  }
+
+  private findCommentVote(solutionId: string, commentId: string): VoteChoice {
+    const solution = this.solutions().find(item => item.id === solutionId);
+    if (!solution) {
+      return null;
+    }
+
+    const search = (comments: CommentViewModel[]): VoteChoice => {
+      for (const comment of comments) {
+        if (comment.id === commentId) {
+          return comment.userVote ?? null;
+        }
+
+        const nested = search(comment.replies);
+        if (nested !== null) {
+          return nested;
+        }
+      }
+
+      return null;
+    };
+
+    return search(solution.comments);
+  }
+
+  private ensureAuthenticated(message: string) {
+    if (this.authService.isLoggedIn$()) {
+      return true;
+    }
+
+    this.toastService.info(message);
+    this.goToLogin();
+    return false;
+  }
+
+  private getStarterCode() {
+    const starterCode = this.problem()?.starterCode?.trim();
+    if (starterCode) {
+      try {
+        const codes = JSON.parse(starterCode);
+        const lang = this.editorLanguage();
+        if (codes && codes[lang]) {
+          return codes[lang];
+        }
+      } catch (e) {
+        // Fallback for non-JSON content (legacy C# only starter codes)
+        if (this.editorLanguage() === 'csharp') {
+          return starterCode;
+        }
+      }
+    }
+
+    switch (this.editorLanguage()) {
+      case 'python':
+        return 'class Solution:\n    def solve(self):\n        pass\n';
+      case 'java':
+        return 'class Solution {\n    public void solve() {\n        \n    }\n}\n';
+      case 'cpp':
+        return '#include <bits/stdc++.h>\nusing namespace std;\n\nclass Solution {\npublic:\n    void solve() {\n        \n    }\n};\n';
+      case 'c':
+        return '#include <stdio.h>\n\nvoid solve(void) {\n    \n}\n';
+      case 'csharp':
+      default:
+        return 'public class Solution\n{\n    public void Solve()\n    {\n        \n    }\n}\n';
+    }
+  }
+
+  private getMonacoTheme() {
+    switch (this.editorTheme()) {
+      case 'light':
+        return 'vs';
+      case 'dark':
+        return 'vs-dark';
+      case 'contrast':
+        return 'hc-black';
+      case 'system':
+      default:
+        return this.themeService.isDark() ? 'vs-dark' : 'vs';
+    }
+  }
+
+  private readIsCompactWorkspace() {
+    return typeof window !== 'undefined' ? window.innerWidth <= 960 : false;
+  }
+
+  private createDefaultDockZones(): Record<DockZoneId, DockZoneState> {
+    return {
+      leftTop: {
+        tabs: ['description', 'solutions', 'submissions'],
+        activeTab: 'description'
+      },
+      leftBottom: {
+        tabs: [],
+        activeTab: null
+      },
+      rightTop: {
+        tabs: ['editor', 'tests', 'result'],
+        activeTab: 'editor'
+      },
+      rightBottom: {
+        tabs: [],
+        activeTab: null
+      }
+    };
+  }
+
+  private activateDockPanel(panelId: DockPanelId) {
+    if (panelId === 'solutions') {
+      this.loadSolutions();
+      return;
+    }
+
+    if (panelId === 'submissions' && this.authService.isLoggedIn$()) {
+      this.loadSubmissions();
+    }
+  }
+
+  private findPanelZone(panelId: DockPanelId): DockZoneId | null {
+    const currentZones = this.dockZones();
+    const zoneIds: DockZoneId[] = ['leftTop', 'leftBottom', 'rightTop', 'rightBottom'];
+
+    for (const zoneId of zoneIds) {
+      if (currentZones[zoneId].tabs.includes(panelId)) {
+        return zoneId;
+      }
+    }
+
+    return null;
+  }
+
+  private movePanelToZone(panelId: DockPanelId, targetZoneId: DockZoneId) {
+    this.dockZones.update(current => {
+      const zoneIds: DockZoneId[] = ['leftTop', 'leftBottom', 'rightTop', 'rightBottom'];
+      const next: Record<DockZoneId, DockZoneState> = {
+        leftTop: { ...current.leftTop, tabs: [...current.leftTop.tabs] },
+        leftBottom: { ...current.leftBottom, tabs: [...current.leftBottom.tabs] },
+        rightTop: { ...current.rightTop, tabs: [...current.rightTop.tabs] },
+        rightBottom: { ...current.rightBottom, tabs: [...current.rightBottom.tabs] }
+      };
+
+      for (const zoneId of zoneIds) {
+        if (!next[zoneId].tabs.includes(panelId)) {
+          continue;
+        }
+
+        next[zoneId].tabs = next[zoneId].tabs.filter(existingPanelId => existingPanelId !== panelId);
+        next[zoneId].activeTab =
+          next[zoneId].activeTab === panelId ? next[zoneId].tabs[0] ?? null : next[zoneId].activeTab;
+      }
+
+      if (!next[targetZoneId].tabs.includes(panelId)) {
+        next[targetZoneId].tabs.push(panelId);
+      }
+      next[targetZoneId].activeTab = panelId;
+
+      this.saveLayoutState(next);
+      return next;
+    });
+
+    this.activateDockPanel(panelId);
+  }
+
+  private getInitialLanguage(): EditorLanguage {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem('compylr.preferredLanguage');
+      if (stored) {
+        const normalized = stored.toLowerCase().replace('#', 'sharp');
+        const isValid = this.editorLanguages.some(opt => opt.value === normalized);
+        return isValid ? (normalized as EditorLanguage) : 'csharp';
+      }
+    }
+    return 'csharp';
+  }
+
+  private getInitialDockZones(): Record<DockZoneId, DockZoneState> {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem('compylr.layoutState');
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch (e) {
+          console.error('Failed to parse stored layoutState', e);
+        }
+      }
+    }
+    return this.createDefaultDockZones();
+  }
+
+  private loadUserPreferences() {
+    if (this.authService.isLoggedIn$()) {
+      this.userService.getMyProfile().subscribe({
+        next: profile => {
+          let needsUpdate = false;
+          const updatePayload: UserPreferencesUpdateRequest = {};
+
+          if (profile.preferredLanguage) {
+            const normalized = profile.preferredLanguage.toLowerCase().replace('#', 'sharp');
+            const isValid = this.editorLanguages.some(opt => opt.value === normalized);
+            const finalLang = isValid ? (normalized as EditorLanguage) : 'csharp';
+
+            if (typeof localStorage !== 'undefined') {
+              localStorage.setItem('compylr.preferredLanguage', finalLang);
+            }
+            this.editorLanguage.set(finalLang);
+            if (this.problem()) {
+              this.code.set(this.getStarterCode());
+            }
+          } else {
+            if (typeof localStorage !== 'undefined') {
+              const localLang = localStorage.getItem('compylr.preferredLanguage');
+              if (localLang) {
+                updatePayload.preferredLanguage = localLang;
+                needsUpdate = true;
+              }
+            }
+          }
+
+          if (profile.layoutState) {
+            if (typeof localStorage !== 'undefined') {
+              localStorage.setItem('compylr.layoutState', profile.layoutState);
+            }
+            try {
+              const layout = JSON.parse(profile.layoutState);
+              this.dockZones.set(layout);
+            } catch (e) {
+              console.error('Failed to parse layout state from profile:', e);
+            }
+          } else {
+            if (typeof localStorage !== 'undefined') {
+              const localLayout = localStorage.getItem('compylr.layoutState');
+              if (localLayout) {
+                updatePayload.layoutState = localLayout;
+                needsUpdate = true;
+              }
+            }
+          }
+
+          if (needsUpdate) {
+            this.userService.updateMyPreferences(updatePayload).subscribe({
+              error: err => console.error('Failed to sync initial preferences to backend:', err)
+            });
+          }
+        },
+        error: err => {
+          console.error('Failed to load user profile preferences:', err);
+        }
+      });
+    }
+  }
+
+  private saveLayoutState(layout: Record<DockZoneId, DockZoneState>) {
+    const layoutStr = JSON.stringify(layout);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('compylr.layoutState', layoutStr);
+    }
+    if (this.authService.isLoggedIn$()) {
+      this.userService.updateMyPreferences({ layoutState: layoutStr }).subscribe({
+        error: err => console.error('Failed to update layout preference on backend:', err)
+      });
+    }
+  }
+
+  private toSolutionUiModel(solution: SolutionSummary): SolutionUiModel {
+    return {
+      ...solution,
+      detail: null,
+      isExpanded: false,
+      isDetailLoading: false,
+      comments: [],
+      commentsPage: 0,
+      hasMoreComments: false,
+      isCommentsLoading: false,
+      userVote: null
+    };
+  }
+
+  private patchSolution(solutionId: string, updater: (solution: SolutionUiModel) => SolutionUiModel) {
+    this.solutions.update(current => current.map(solution => (solution.id === solutionId ? updater(solution) : solution)));
+  }
+
+  private appendReply(
+    comments: CommentViewModel[],
+    parentCommentId: string,
+    comment: CommentViewModel
+  ): CommentViewModel[] {
+    return comments.map(existingComment => {
+      if (existingComment.id === parentCommentId) {
+        return {
+          ...existingComment,
+          replies: [...existingComment.replies, comment]
+        };
+      }
+
+      return {
+        ...existingComment,
+        replies: this.appendReply(existingComment.replies, parentCommentId, comment)
+      };
+    });
+  }
+
+  private updateCommentTree(
+    comments: CommentViewModel[],
+    commentId: string,
+    updater: (comment: CommentViewModel) => CommentViewModel
+  ): CommentViewModel[] {
+    return comments.map(comment => {
+      if (comment.id === commentId) {
+        return updater(comment);
+      }
+
+      return {
+        ...comment,
+        replies: this.updateCommentTree(comment.replies, commentId, updater)
+      };
+    });
+  }
+
+  private setPendingState(
+    stateSignal: {
+      update: (updater: (current: Record<string, boolean>) => Record<string, boolean>) => void;
+    },
+    key: string,
+    value: boolean
+  ) {
+    stateSignal.update(current => ({ ...current, [key]: value }));
+  }
+
+  private getInitialEditorTheme(): EditorThemeChoice {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem('compylr.editorTheme');
+      if (stored) return stored as EditorThemeChoice;
+    }
+    return 'system';
+  }
+
+  private getInitialEditorFontSize(): number {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem('compylr.editorFontSize');
+      if (stored) return parseInt(stored, 10) || 14;
+    }
+    return 14;
+  }
+
+  private getInitialEditorFontFamily(): string {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem('compylr.editorFontFamily');
+      if (stored) return stored;
+    }
+    return 'IBM Plex Mono';
+  }
+
+  private getInitialEditorTabSize(): number {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem('compylr.editorTabSize');
+      if (stored) return parseInt(stored, 10) || 4;
+    }
+    return 4;
+  }
+
+  onMainSplitDragEnd(event: SplitGutterInteractionEvent) {
+    const sizes = event.sizes.map(s => typeof s === 'number' ? s : parseFloat(s as any) || 0);
+    if (this.mainSplitDirection() === 'horizontal') {
+      this.mainSplitSizesHorizontal.set(sizes);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('compylr.mainSplitSizesHorizontal', JSON.stringify(sizes));
+      }
+    } else {
+      this.mainSplitSizesVertical.set(sizes);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('compylr.mainSplitSizesVertical', JSON.stringify(sizes));
+      }
+    }
+  }
+
+  onLeftSplitDragEnd(event: SplitGutterInteractionEvent) {
+    const sizes = event.sizes.map(s => typeof s === 'number' ? s : parseFloat(s as any) || 0);
+    this.leftSplitSizes.set(sizes);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('compylr.leftSplitSizes', JSON.stringify(sizes));
+    }
+  }
+
+  onRightSplitDragEnd(event: SplitGutterInteractionEvent) {
+    const sizes = event.sizes.map(s => typeof s === 'number' ? s : parseFloat(s as any) || 0);
+    this.rightSplitSizes.set(sizes);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('compylr.rightSplitSizes', JSON.stringify(sizes));
+    }
+  }
+
+  private getInitialMainSplitSizesHorizontal(): number[] {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem('compylr.mainSplitSizesHorizontal');
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch (e) {}
+      }
+    }
+    return [46, 54];
+  }
+
+  private getInitialMainSplitSizesVertical(): number[] {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem('compylr.mainSplitSizesVertical');
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch (e) {}
+      }
+    }
+    return [50, 50];
+  }
+
+  private getInitialLeftSplitSizes(): number[] {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem('compylr.leftSplitSizes');
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch (e) {}
+      }
+    }
+    return [62, 38];
+  }
+
+  private getInitialRightSplitSizes(): number[] {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem('compylr.rightSplitSizes');
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch (e) {}
+      }
+    }
+    return [60, 40];
+  }
 }

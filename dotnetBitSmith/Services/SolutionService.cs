@@ -46,7 +46,9 @@ public class SolutionService : ISolutionService {
             ProblemId = newSolution.ProblemId,
             Title = newSolution.Title,
             AuthorName = username,
+            Excerpt = BuildExcerpt(newSolution.Content),
             VoteCount = 0,
+            CommentCount = 0,
             CreatedAt = newSolution.CreatedAt
         };
     }
@@ -70,11 +72,49 @@ public class SolutionService : ISolutionService {
                     ProblemId = problemId,
                     Title = s.Title,
                     AuthorName = s.User != null ? (s.User.DisplayName ?? s.User.Username) : "Unknown",
-                    VoteCount = s.Votes.Count,
+                    Excerpt = BuildExcerpt(s.Content),
+                    VoteCount = s.Votes.Count(v => v.IsUpvote) - s.Votes.Count(v => !v.IsUpvote),
+                    CommentCount = s.Comments.Count,
                     CreatedAt = s.CreatedAt
                 }
             ).ToListAsync();
 
         return solutions;
+    }
+
+    public async Task<SolutionDetailModel> GetSolutionByIdAsync(Guid solutionId) {
+        _logger.LogInformation("Fetching solution detail for Id {SolutionId}", solutionId);
+
+        var solution = await _context.Solutions
+            .AsNoTracking()
+            .Where(s => s.Id == solutionId)
+            .Select(s => new SolutionDetailModel {
+                Id = s.Id,
+                ProblemId = s.ProblemId,
+                Title = s.Title,
+                AuthorName = s.User != null ? (s.User.DisplayName ?? s.User.Username) : "Unknown",
+                Excerpt = BuildExcerpt(s.Content),
+                Content = s.Content,
+                VoteCount = s.Votes.Count(v => v.IsUpvote) - s.Votes.Count(v => !v.IsUpvote),
+                CommentCount = s.Comments.Count,
+                CreatedAt = s.CreatedAt
+            })
+            .FirstOrDefaultAsync()
+            ?? throw new NotFoundException("Solution with ID " + solutionId + " not found.");
+
+        return solution;
+    }
+
+    private static string BuildExcerpt(string content) {
+        const int previewLength = 180;
+
+        if (string.IsNullOrWhiteSpace(content)) {
+            return string.Empty;
+        }
+
+        var trimmed = content.Trim();
+        return trimmed.Length <= previewLength
+            ? trimmed
+            : trimmed[..previewLength] + "...";
     }
 }

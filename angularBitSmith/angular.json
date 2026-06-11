@@ -26,11 +26,15 @@
             "assets": [
               {
                 "glob": "**/*",
-                "input": "public"
+                "input": "node_modules/monaco-editor/min/vs",
+                "output": "/assets/monaco/vs"
               }
             ],
             "styles": [
-              "src/styles.scss"
+              "src/styles.scss",
+              "node_modules/golden-layout/dist/css/goldenlayout-base.css",
+              "node_modules/golden-layout/dist/css/themes/goldenlayout-dark-theme.css",
+              "node_modules/katex/dist/katex.min.css"
             ]
           },
           "configurations": {
@@ -39,12 +43,12 @@
                 {
                   "type": "initial",
                   "maximumWarning": "500kB",
-                  "maximumError": "1MB"
+                  "maximumError": "1.1MB"
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "4kB",
-                  "maximumError": "8kB"
+                  "maximumWarning": "12kB",
+                  "maximumError": "18kB"
                 }
               ],
               "outputHashing": "all"

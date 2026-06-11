@@ -36,5 +36,13 @@ namespace dotnetBitSmith.Controllers {
             var solutions = await _solutionService.GetSolutionsForProblemAsync(problemId);
             return Ok(solutions);
         }
+
+        [HttpGet("{solutionId}")]
+        [ProducesResponseType(typeof(SolutionDetailModel), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult> GetSolutionById(Guid solutionId) {
+            var solution = await _solutionService.GetSolutionByIdAsync(solutionId);
+            return Ok(solution);
+        }
     }
 }

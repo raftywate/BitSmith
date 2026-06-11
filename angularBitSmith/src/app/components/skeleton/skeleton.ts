@@ -3,16 +3,29 @@ import { CommonModule } from '@angular/common';
 
 @Component({
     selector: 'app-skeleton',
-    standalone: true,
     imports: [CommonModule],
     template: `
-    <div 
-      class="animate-pulse bg-gray-200 dark:bg-gray-700 rounded"
+    <div
+      class="skeleton"
       [style.width]="width"
       [style.height]="height"
       [ngClass]="classes"
     ></div>
-  `
+  `,
+    styles: [`
+    .skeleton {
+      display: block;
+      border-radius: 999px;
+      background: var(--surface-2);
+      animation: skeleton-pulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes skeleton-pulse {
+      50% {
+        opacity: 0.55;
+      }
+    }
+  `]
 })
 export class SkeletonComponent {
     @Input() width = '100%';

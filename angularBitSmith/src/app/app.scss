@@ -1,10 +1,38 @@
-/* Apply global styles using our custom Tailwind colors.
-  We use the 'dark:' variant to automatically switch based on the <html> class.
-*/
 :host {
   display: block;
-  min-height: 100vh;
-
-  @apply bg-bg-light text-text-primary-light;
-  @apply dark:bg-bg-dark dark:text-text-primary-dark;
 }
+
+.app-shell {
+  position: relative;
+  min-height: 100vh;
+  overflow: clip;
+}
+
+.app-shell__backdrop {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: var(--bg-app);
+  z-index: 0;
+}
+
+.app-shell__content {
+  position: relative;
+  z-index: 1;
+  width: min(1600px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 3rem;
+}
+
+.app-shell__content--workspace {
+  width: calc(100% - 0.75rem);
+  padding-top: 1.25rem;
+  padding-bottom: 0;
+}
+
+.app-shell--workspace {
+  padding-bottom: 0;
+}
+
+
+

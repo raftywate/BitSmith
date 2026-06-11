@@ -2,29 +2,54 @@ import { Routes } from '@angular/router';
 import { Login } from './auth/login/login';
 import { Register } from './auth/register/register';
 import { ProblemList } from './problems/problem-list/problem-list';
-import { ProblemDetail } from './problems/problem-detail/problem-detail';
+import { ProblemDetailComponent } from './problems/problem-detail/problem-detail';
+import { authGuard, guestGuard, adminGuard } from './services/auth.guards';
+import { ProfileComponent } from './profile/profile';
+import { SettingsComponent } from './settings/settings';
+import { AdminPanelComponent } from './admin/admin-panel/admin-panel';
 
 export const routes: Routes = [
-  { path: '', redirectTo: '/problems', pathMatch: 'full' }, // Redirect root to problems
+  { path: '', redirectTo: '/problems', pathMatch: 'full' },
   {
     path: 'problems',
     component: ProblemList,
-    title: 'Problems - BitSmith'
+    title: 'Problems - Compylr'
   },
   {
     path: 'problems/:id',
-    component: ProblemDetail,
-    title: 'Problems - BitSmith'
+    component: ProblemDetailComponent,
+    title: 'Problems - Compylr'
   },
   {
     path: 'login',
     component: Login,
-    title: 'Login - BitSmith'
+    canActivate: [guestGuard],
+    title: 'Login - Compylr'
   },
   {
     path: 'register',
     component: Register,
-    title: 'Register - BitSmith'
+    canActivate: [guestGuard],
+    title: 'Register - Compylr'
   },
-  { path: '**', redirectTo: '/problems' } // Wildcard route
+  {
+    path: 'profile',
+    component: ProfileComponent,
+    canActivate: [authGuard],
+    title: 'Profile - Compylr'
+  },
+  {
+    path: 'settings',
+    component: SettingsComponent,
+    canActivate: [authGuard],
+    title: 'Settings - Compylr'
+  },
+  {
+    path: 'admin',
+    component: AdminPanelComponent,
+    canActivate: [adminGuard],
+    title: 'Admin Panel - Compylr'
+  },
+  { path: '**', redirectTo: '/problems' }
 ];
+

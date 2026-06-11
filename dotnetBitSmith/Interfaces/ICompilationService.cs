@@ -1,4 +1,5 @@
 using dotnetBitSmith.Entities;
+using dotnetBitSmith.Models.Submissions;
 
 namespace dotnetBitSmith.Interfaces {
     public interface ICompilationService {
@@ -9,5 +10,7 @@ namespace dotnetBitSmith.Interfaces {
         /// <param name="submission"></param>
         /// <returns>updated submission entity with the final status, time and, memory</returns>
         Task<Submission> JudgeSubmissionAsync(Submission submission);
+        Task<SampleRunResultModel> RunSampleAsync(string language, string code, TestCase testCase, string problemTitle, string problemDescription);
+        Task<RunCodeResultModel> ExecuteCustomCodeAsync(string language, string code, string stdin);
     }
 }

@@ -1,1 +1,97 @@
-<p>register works!</p>
+<section class="auth-page">
+  <div class="auth-page__grid auth-page__grid--reverse">
+    <div class="auth-card panel">
+      <div class="auth-card__header">
+        <p class="eyebrow">New account</p>
+        <h2>Create your profile</h2>
+        <p>Register once, then use the same identity for submissions, solution posts, and discussion.</p>
+      </div>
+
+      <form [formGroup]="registerForm" (ngSubmit)="onSubmit()" class="auth-card__form">
+        <label class="field">
+          <span class="field__label">Username</span>
+          <input class="input" type="text" formControlName="username" autocomplete="username"
+            placeholder="compylr-crafter" />
+          @if (username?.invalid && username?.touched) {
+          <p class="field__error">Choose a username between 3 and 50 characters.</p>
+          }
+        </label>
+
+        <label class="field">
+          <span class="field__label">Email</span>
+          <input class="input" type="email" formControlName="email" autocomplete="email"
+            placeholder="you@compylr.dev" />
+          @if (email?.invalid && email?.touched) {
+          <p class="field__error">Enter a valid email address.</p>
+          }
+        </label>
+
+        <label class="field">
+          <span class="field__label">Password</span>
+          <input class="input" type="password" formControlName="password" autocomplete="new-password"
+            placeholder="At least 6 characters" />
+          @if (password?.invalid && password?.touched) {
+          <p class="field__error">Password must be at least 6 characters long.</p>
+          }
+        </label>
+
+        <label class="field">
+          <span class="field__label">Confirm password</span>
+          <input class="input" type="password" formControlName="confirmPassword" autocomplete="new-password"
+            placeholder="Repeat your password" />
+          @if ((confirmPassword?.touched || registerForm.touched) && registerForm.hasError('mismatch')) {
+          <p class="field__error">Passwords must match.</p>
+          }
+        </label>
+
+        @if (errorMessage()) {
+        <div class="error-state">{{ errorMessage() }}</div>
+        }
+
+        <button type="submit" class="btn btn--primary auth-card__submit" [disabled]="isLoading()">
+          {{ isLoading() ? 'Creating account...' : 'Create your Compylr account' }}
+        </button>
+
+        <p class="auth-card__invite-toggle">
+          <button type="button" class="invite-toggle-btn" (click)="showInviteField.set(!showInviteField())">
+            {{ showInviteField() ? '− Hide invite field' : '+ Have an invite?' }}
+          </button>
+        </p>
+
+        @if (showInviteField()) {
+        <label class="field">
+          <span class="field__label">Invite Code</span>
+          <input class="input" type="text" formControlName="inviteCode"
+            placeholder="Enter your invite code" autocomplete="off" />
+          <p class="field__hint" style="font-size: 0.8rem; color: var(--text-muted); margin: 0.25rem 0 0;">Invite codes grant special access. Leave empty for a standard account.</p>
+        </label>
+        }
+      </form>
+
+      <p class="auth-card__footer">
+        Already registered?
+        <a routerLink="/login" [queryParams]="{ redirect: redirectUrl }">Sign in instead</a>
+      </p>
+    </div>
+
+    <div class="auth-page__intro glass-panel">
+      <span class="eyebrow">Why Compylr</span>
+      <h1 class="section-heading">Practice with structure, then learn from the discussion.</h1>
+      <p class="section-copy">
+        Your account unlocks the full feedback loop: personal submission history, community solutions, nested
+        comments, and voting to surface the clearest explanations.
+      </p>
+
+      <div class="auth-page__highlights">
+        <article class="auth-page__highlight">
+          <h2>Problem-first design</h2>
+          <p>Keep the description, editor, and submission result within one smooth workspace.</p>
+        </article>
+        <article class="auth-page__highlight">
+          <h2>Ownable identity</h2>
+          <p>Update your display name, bio, and profile image once your account is live.</p>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
