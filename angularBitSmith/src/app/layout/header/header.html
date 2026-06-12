@@ -14,6 +14,7 @@
             @if (isProblemDetailPage()) {
             <div class="problem-navigation">
                 <a [routerLink]="prevProblemId ? ['/problems', prevProblemId] : null"
+                   [queryParams]="prevProblemQueryParams"
                    class="nav-arrow"
                    [class.nav-arrow--disabled]="!prevProblemId"
                    [attr.title]="prevProblemId ? 'Clicking on it will take to the prev problem' : 'No previous problem'">
@@ -22,6 +23,7 @@
                     </svg>
                 </a>
                 <a [routerLink]="nextProblemId ? ['/problems', nextProblemId] : null"
+                   [queryParams]="nextProblemQueryParams"
                    class="nav-arrow"
                    [class.nav-arrow--disabled]="!nextProblemId"
                    [attr.title]="nextProblemId ? 'Clicking on it will take to the next problem' : 'No next problem'">
@@ -63,7 +65,7 @@
 
                 @if (isMenuOpen) {
                 <div class="user-menu glass-panel">
-                    <a routerLink="/profile" class="user-menu__profile-link" (click)="isMenuOpen = false">
+                    <a [routerLink]="['/', user.username]" class="user-menu__profile-link" (click)="isMenuOpen = false">
                         @if (user.profilePictureUrl) {
                         <img [src]="user.profilePictureUrl" alt="Avatar" class="user-menu__avatar" />
                         } @else {

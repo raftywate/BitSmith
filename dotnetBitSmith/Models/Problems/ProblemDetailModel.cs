@@ -5,6 +5,7 @@ namespace dotnetBitSmith.Models.Problems {
         public Guid Id { get; set; }
         public int ProblemNumber { get; set; }
         public string Title { get; set; }
+        public string Slug { get; set; } = string.Empty;
         public string Description { get; set; }     
         public ProblemDifficulty Difficulty { get; set; }
         public string? StarterCode { get; set; }

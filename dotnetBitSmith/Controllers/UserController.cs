@@ -117,5 +117,14 @@ namespace dotnetBitSmith.Controllers {
             var profile = await _userService.GetProfileByIdAsync(userId);
             return Ok(profile);
         }
+
+        [HttpGet("username/{username}")]
+        [AllowAnonymous]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(UserProfileModel), StatusCodes.Status200OK)]
+        public async Task<ActionResult<UserProfileModel>> GetProfileByUsername(string username) {
+            var profile = await _userService.GetProfileByUsernameAsync(username);
+            return Ok(profile);
+        }
     }
 }

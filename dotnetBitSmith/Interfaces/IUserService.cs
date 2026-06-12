@@ -4,6 +4,7 @@ namespace dotnetBitSmith.Interfaces {
     public interface IUserService {
         Task<UserProfileModel> GetMyProfileAsync(Guid userId);
         Task<UserProfileModel> GetProfileByIdAsync(Guid userId);
+        Task<UserProfileModel> GetProfileByUsernameAsync(string username);
         Task<UserProfileModel> UpdateMyProfileAsync(Guid userId, UserProfileUpdateModel model);
         Task<UserProfileModel> UpdateMyAvatarAsync(Guid userId, string? profilePictureUrl);
         Task UpdateMyPreferencesAsync(Guid userId, string? preferredLanguage, string? layoutState);

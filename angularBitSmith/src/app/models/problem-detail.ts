@@ -13,6 +13,7 @@ export interface ProblemDetail {
   id: string;
   problemNumber: number;
   title: string;
+  slug?: string;
   description: string;
   difficulty: ProblemDifficulty;
   starterCode: string | null;

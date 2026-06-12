@@ -6,10 +6,14 @@ export interface SolutionSummary {
   problemId: string;
   title: string;
   authorName: string;
+  authorUsername: string;
   excerpt: string;
   voteCount: number;
   commentCount: number;
   createdAt: string;
+  problemTitle?: string;
+  problemNumber?: number;
+  problemSlug?: string;
 }
 
 export interface SolutionDetail extends SolutionSummary {
@@ -44,4 +48,13 @@ export interface VoteRequest {
   entityId: string;
   entityType: VotableEntityType;
   isUpvote: boolean;
+}
+
+export interface SolutionUpdateRequest {
+  title: string;
+  content: string;
+}
+
+export interface CommentUpdateRequest {
+  content: string;
 }

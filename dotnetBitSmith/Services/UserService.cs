@@ -106,6 +106,32 @@ namespace dotnetBitSmith.Services {
             _logger.LogInformation("Preferences for User {UserId} updated successfully.", userId);
         }
 
+        public async Task<UserProfileModel> GetProfileByUsernameAsync(string username) {
+            _logger.LogInformation("Fetching profile for Username {Username}", username);
+
+            var user = await _context.Users.
+                AsNoTracking().
+                FirstOrDefaultAsync(u => u.Username.ToLower() == username.ToLower());
+
+            if (user == null) {
+                _logger.LogWarning("GetProfileByUsernameAsync failed: User {Username} not found.", username);
+                throw new NotFoundException($"User with Username '{username}' not found.");
+            }
+
+            return new UserProfileModel {
+                Id = user.Id,
+                Bio = user.Bio,
+                Username = user.Username,
+                Email = user.Email,
+                CreatedAt = user.CreatedAt,
+                DisplayName = user.DisplayName,
+                ProfilePictureUrl = user.ProfilePictureUrl,
+                Stats = await BuildStatsAsync(user.Id),
+                PreferredLanguage = user.PreferredLanguage,
+                LayoutState = user.LayoutState
+            };
+        }
+
         private async Task<UserStatsModel> BuildStatsAsync(Guid userId) {
             var acceptedSubmissions = await _context.Submissions
                 .AsNoTracking()
@@ -145,6 +171,7 @@ namespace dotnetBitSmith.Services {
                     Id = problem.ProblemId,
                     ProblemNumber = problem.ProblemNumber,
                     Title = problem.Title,
+                    Slug = ProblemService.GenerateSlug(problem.Title),
                     Difficulty = problem.Difficulty,
                     AcceptedAt = problem.CreatedAt
                 }).ToList()

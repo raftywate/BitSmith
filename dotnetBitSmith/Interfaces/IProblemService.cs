@@ -6,6 +6,8 @@ namespace dotnetBitSmith.Interfaces {
         Task<ProblemSummaryListModel> GetProblemsAsync(ProblemParametersModel parameters);
         /// Gets the full details for a single problem by its ID.
         Task<ProblemDetailModel> GetProblemByIdAsync(Guid problemId, Guid? userId = null);
+        /// Gets the full details for a single problem by its slug.
+        Task<ProblemDetailModel> GetProblemBySlugAsync(string slug, Guid? userId = null);
         /// Creates a new problem in the database.
         Task<ProblemDetailModel> CreateProblemAsync(ProblemCreateModel model, Guid authorId);
         /// Updates an existing problem in the database.

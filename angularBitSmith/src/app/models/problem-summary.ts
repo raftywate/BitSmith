@@ -4,6 +4,7 @@ import { ProblemDifficulty } from "./problem-difficulty.enum";
 export interface ProblemSummary {
     id: string;
     title: string;
+    slug?: string;
     problemNumber: number;
     difficulty: ProblemDifficulty;
     categories: Category[];

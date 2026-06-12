@@ -18,6 +18,39 @@ namespace dotnetBitSmith.Services {
             _logger = logger;
         }
 
+        public static string GenerateSlug(string title) {
+            if (string.IsNullOrWhiteSpace(title)) return string.Empty;
+            var slug = title.ToLowerInvariant();
+            var sb = new System.Text.StringBuilder();
+            bool prevWasHyphen = false;
+            foreach (char c in slug) {
+                if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+                    sb.Append(c);
+                    prevWasHyphen = false;
+                } else if (c == ' ' || c == '-' || c == '_') {
+                    if (!prevWasHyphen && sb.Length > 0) {
+                        sb.Append('-');
+                        prevWasHyphen = true;
+                    }
+                }
+            }
+            return sb.ToString().Trim('-');
+        }
+
+        public async Task<ProblemDetailModel> GetProblemBySlugAsync(string slug, Guid? userId = null) {
+            _logger.LogInformation("Fetching problem details for slug {Slug}", slug);
+            var problemLookup = await _context.Problems
+                .AsNoTracking()
+                .Select(p => new { p.Id, p.Title })
+                .ToListAsync();
+            var matchedProblem = problemLookup
+                .FirstOrDefault(p => GenerateSlug(p.Title).Equals(slug, System.StringComparison.OrdinalIgnoreCase));
+            if (matchedProblem == null) {
+                throw new NotFoundException("Problem with slug " + slug + " not found.");
+            }
+            return await GetProblemByIdAsync(matchedProblem.Id, userId);
+        }
+
         public async Task<ProblemSummaryListModel> GetProblemsAsync(ProblemParametersModel parameters) {
             _logger.LogInformation("Fetching problems page {PageNumber} with size {PageSize}", parameters.PageNumber, parameters.PageSize);
 
@@ -76,6 +109,10 @@ namespace dotnetBitSmith.Services {
                     }).ToList()
                 })
                 .ToListAsync();
+
+            foreach (var p in problems) {
+                p.Slug = GenerateSlug(p.Title);
+            }
 
             if (parameters.UserId.HasValue) {
                 var problemIds = problems.Select(p => p.Id).ToList();
@@ -139,6 +176,7 @@ namespace dotnetBitSmith.Services {
                 Id = problem.Id,
                 ProblemNumber = problem.ProblemNumber,
                 Title = problem.Title,
+                Slug = GenerateSlug(problem.Title),
                 Description = problem.Description,
                 Difficulty = problem.Difficulty,
                 StarterCode = problem.StarterCode,
@@ -364,6 +402,7 @@ namespace dotnetBitSmith.Services {
             return new ProblemSummaryModel {
                 Id = problem.Id,
                 Title = problem.Title,
+                Slug = GenerateSlug(problem.Title),
                 ProblemNumber = problem.ProblemNumber,
                 Difficulty = problem.Difficulty,
                 Categories = problem.ProblemCategories.Select(pc => new CategoryModel {

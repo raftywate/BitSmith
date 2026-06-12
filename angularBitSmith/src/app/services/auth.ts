@@ -22,7 +22,7 @@ export class AuthService extends AuthServiceContract {
 
   public readonly isLoggedIn$: Signal<boolean> = computed(() => !!this.userSignal());
 
-  public readonly isAdmin$: Signal<boolean> = computed(() => this.userSignal()?.role === 'Admin');
+  public readonly isAdmin$: Signal<boolean> = computed(() => this.userSignal()?.role?.toLowerCase() === 'admin');
 
   private getInitialUser(): User | null {
     const token = localStorage.getItem(this.tokenStorageKey);

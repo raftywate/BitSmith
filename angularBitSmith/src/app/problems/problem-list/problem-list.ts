@@ -223,8 +223,8 @@ export class ProblemList implements OnInit {
         if (isFuture) return;
         this.problemService.getProblemOfTheDay(dateStr).subscribe({
             next: pod => {
-                if (pod && pod.id) {
-                    void this.router.navigate(['/problems', pod.id]);
+                if (pod && (pod.slug || pod.id)) {
+                    void this.router.navigate(['/problems', pod.slug || pod.id], { queryParams: { podDate: dateStr } });
                 } else {
                     this.toastService.error('No Problem of the Day found for this date.');
                 }
@@ -250,13 +250,21 @@ export class ProblemList implements OnInit {
         });
     }
 
-    open(id: string) {
-        void this.router.navigate(['/problems', id]);
+    getTodayStr(): string {
+        return new Date().toLocaleDateString('en-CA');
     }
 
-    openInNewTab(id: string) {
+    open(id: string, podDate?: string) {
+        if (podDate) {
+            void this.router.navigate(['/problems', id], { queryParams: { podDate } });
+        } else {
+            void this.router.navigate(['/problems', id]);
+        }
+    }
+
+    openInNewTab(id: string, podDate?: string) {
         const url = this.router.serializeUrl(
-            this.router.createUrlTree(['/problems', id])
+            this.router.createUrlTree(['/problems', id], podDate ? { queryParams: { podDate } } : undefined)
         );
         window.open(url, '_blank');
     }

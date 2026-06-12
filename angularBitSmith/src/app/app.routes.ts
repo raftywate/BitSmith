@@ -23,6 +23,18 @@ export const routes: Routes = [
     title: 'Problems - Compylr'
   },
   {
+    path: 'problems/:id/solutions/new',
+    loadComponent: () => import('./problems/solution-editor/solution-editor').then(m => m.SolutionEditorComponent),
+    canActivate: [authGuard],
+    title: 'Write a Solution - Compylr'
+  },
+  {
+    path: 'problems/:id/solutions/:solutionId/edit',
+    loadComponent: () => import('./problems/solution-editor/solution-editor').then(m => m.SolutionEditorComponent),
+    canActivate: [authGuard],
+    title: 'Edit Solution - Compylr'
+  },
+  {
     path: 'login',
     component: Login,
     canActivate: [guestGuard],
@@ -69,6 +81,11 @@ export const routes: Routes = [
     component: AdminPanelComponent,
     canActivate: [adminGuard],
     title: 'Edit Problem - Compylr'
+  },
+  {
+    path: ':username',
+    component: ProfileComponent,
+    title: 'Profile - Compylr'
   },
   { path: '**', redirectTo: '/problems' }
 ];

@@ -35,16 +35,23 @@ namespace dotnetBitSmith.Controllers {
             return Ok(problems);
         }
 
-        [HttpGet("{problemId}", Name = "GetProblemById")]
+        [HttpGet("{identifier}", Name = "GetProblemById")]
         [ProducesResponseType(typeof(IEnumerable<ProblemDetailModel>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<ProblemDetailModel>> GetProblemByIdAsync(Guid problemId) {
+        public async Task<ActionResult<ProblemDetailModel>> GetProblemByIdAsync(string identifier) {
             Guid? userId = null;
             var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (!string.IsNullOrEmpty(userIdString) && Guid.TryParse(userIdString, out var parsedId)) {
                 userId = parsedId;
             }
-            var problem = await _problemService.GetProblemByIdAsync(problemId, userId);
+            
+            ProblemDetailModel problem;
+            if (Guid.TryParse(identifier, out var problemId)) {
+                problem = await _problemService.GetProblemByIdAsync(problemId, userId);
+            } else {
+                problem = await _problemService.GetProblemBySlugAsync(identifier, userId);
+            }
+
             if (problem == null) return NotFound();
 
             // Hide test cases from regular users
@@ -66,7 +73,7 @@ namespace dotnetBitSmith.Controllers {
         public async Task<ActionResult<ProblemDetailModel>> CreateProblem([FromBody] ProblemCreateModel model) {
             var authorId = User.GetUserId();
             var newProblem = await _problemService.CreateProblemAsync(model, authorId);
-            return CreatedAtRoute("GetProblemById", new { problemId = newProblem.Id }, newProblem);
+            return CreatedAtRoute("GetProblemById", new { identifier = newProblem.Id }, newProblem);
         }
 
         [HttpPut("{problemId}")]

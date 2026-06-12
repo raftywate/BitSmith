@@ -3,10 +3,20 @@
   <div class="profile-page__loading panel">
     Loading your profile...
   </div>
+  } @else if (profileNotFound()) {
+  <div class="profile-page__not-found panel">
+    <div class="not-found-card">
+      <div class="not-found-card__icon">🔍</div>
+      <h2>User Not Found</h2>
+      <p>The profile you are trying to view does not exist on Compylr.</p>
+      <a routerLink="/problems" class="btn btn--primary">Browse Problems</a>
+    </div>
+  </div>
   } @else if (profile(); as profileModel) {
   <div class="profile-page__top">
     <aside class="profile-card panel">
       <div class="profile-card__avatar-wrap">
+        @if (isOwner()) {
         <button type="button" class="profile-card__avatar-button" (click)="toggleAvatarMenu()" aria-label="Edit avatar">
           @if (profileModel.profilePictureUrl) {
           <img class="profile-card__avatar" [src]="profileModel.profilePictureUrl" [alt]="profileModel.username" />
@@ -30,6 +40,15 @@
           }
         </div>
         }
+        } @else {
+        <div class="profile-card__avatar-readonly">
+          @if (profileModel.profilePictureUrl) {
+          <img class="profile-card__avatar" [src]="profileModel.profilePictureUrl" [alt]="profileModel.username" />
+          } @else {
+          <span class="profile-card__avatar avatar-fallback">{{ initials() }}</span>
+          }
+        </div>
+        }
       </div>
 
       <span class="eyebrow">Public identity</span>
@@ -39,7 +58,9 @@
         {{ profileModel.bio || 'Add a short bio so other Compylr users know how you think about problems.' }}
       </p>
 
+      @if (isOwner()) {
       <button type="button" class="edit-capsule" (click)="startEditing()">Edit profile</button>
+      }
 
       <p class="profile-card__meta">Joined {{ profileModel.createdAt | date: 'mediumDate' }}</p>
       @if (avatarError()) {
@@ -161,32 +182,70 @@
     </div>
   </section>
 
-  <section class="accepted-problems panel">
-    <div class="accepted-problems__header">
-      <div>
-        <span class="eyebrow">Accepted</span>
-        <h2>Solved problems</h2>
-      </div>
-      <span>{{ profileModel.stats.acceptedProblems.length }} accepted</span>
+  <section class="profile-tabs panel">
+    <div class="profile-tabs__header">
+      <button type="button" class="profile-tab-btn" [class.profile-tab-btn--active]="activeTab() === 'recent-ac'" (click)="activeTab.set('recent-ac')">
+        Recent AC
+        <span class="profile-tab-btn__count">{{ profileModel.stats.acceptedProblems.length }}</span>
+      </button>
+      <button type="button" class="profile-tab-btn" [class.profile-tab-btn--active]="activeTab() === 'solutions'" (click)="activeTab.set('solutions')">
+        Solutions
+        <span class="profile-tab-btn__count">{{ solutions().length }}</span>
+      </button>
     </div>
 
-    @if (!profileModel.stats.acceptedProblems.length) {
-    <div class="empty-state">Accepted problems will appear here after your first successful submission.</div>
-    } @else {
-    <div class="accepted-problems__list">
-      @for (problem of profileModel.stats.acceptedProblems; track problem.id) {
-      <a class="accepted-problem" [routerLink]="['/problems', problem.id]">
-        <span class="accepted-problem__number">#{{ problem.problemNumber }}</span>
-        <strong>{{ problem.title }}</strong>
-        <span class="difficulty-chip" [class.easy]="problem.difficulty === 'Easy'"
-          [class.medium]="problem.difficulty === 'Medium'" [class.hard]="problem.difficulty === 'Hard'">
-          {{ problem.difficulty }}
-        </span>
-        <span class="accepted-problem__date">{{ problem.acceptedAt | date: 'mediumDate' }}</span>
-      </a>
+    <div class="profile-tabs__content">
+      @if (activeTab() === 'recent-ac') {
+        <div class="accepted-problems-tab">
+          @if (!profileModel.stats.acceptedProblems.length) {
+          <div class="empty-state">Accepted problems will appear here after your first successful submission.</div>
+          } @else {
+          <div class="accepted-problems__list">
+            @for (problem of profileModel.stats.acceptedProblems; track problem.id) {
+            <a class="accepted-problem" [routerLink]="['/problems', problem.slug || problem.id]">
+              <span class="accepted-problem__number">#{{ problem.problemNumber }}</span>
+              <strong>{{ problem.title }}</strong>
+              <span class="difficulty-chip" [class.easy]="problem.difficulty === 'Easy'"
+                [class.medium]="problem.difficulty === 'Medium'" [class.hard]="problem.difficulty === 'Hard'">
+                {{ problem.difficulty }}
+              </span>
+              <span class="accepted-problem__date">{{ problem.acceptedAt | date: 'mediumDate' }}</span>
+            </a>
+            }
+          </div>
+          }
+        </div>
+      } @else if (activeTab() === 'solutions') {
+        <div class="solutions-tab">
+          @if (isLoadingSolutions()) {
+            <div class="empty-state">Loading posted solutions...</div>
+          } @else if (!solutions().length) {
+            <div class="empty-state">No solutions posted yet.</div>
+          } @else {
+            <div class="profile-solutions__list">
+              @for (sol of solutions(); track sol.id) {
+              <a class="profile-solution-card" [routerLink]="['/problems', sol.problemSlug || sol.problemId]">
+                <div class="profile-solution-card__header">
+                  <div class="profile-solution-card__problem-info">
+                    <span class="profile-solution-card__number">#{{ sol.problemNumber || '?' }}</span>
+                    <strong class="profile-solution-card__problem-title">{{ sol.problemTitle || 'Unknown Problem' }}</strong>
+                  </div>
+                  <span class="profile-solution-card__date">{{ sol.createdAt | date: 'mediumDate' }}</span>
+                </div>
+                <h3 class="profile-solution-card__title">{{ sol.title }}</h3>
+                <p class="profile-solution-card__excerpt">{{ stripHtml(sol.excerpt) }}</p>
+                <div class="profile-solution-card__meta">
+                  <span class="profile-solution-card__metric">▲ {{ sol.voteCount }} votes</span>
+                  <span class="profile-solution-card__divider">•</span>
+                  <span class="profile-solution-card__metric">{{ sol.commentCount }} comments</span>
+                </div>
+              </a>
+              }
+            </div>
+          }
+        </div>
       }
     </div>
-    }
   </section>
 
   @if (avatarEditorOpen() && selectedAvatarDataUrl()) {

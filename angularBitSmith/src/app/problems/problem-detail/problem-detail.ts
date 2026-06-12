@@ -33,6 +33,7 @@ import { WorkspaceActionService } from '../../services/workspace-action';
 import { UserPreferencesUpdateRequest } from '../../models/user-profile';
 import { getApiErrorMessage } from '../../utils/api-error';
 import { MarkdownRenderPipe } from '../../pipes/markdown-render.pipe';
+import { finalize } from 'rxjs/operators';
 
 type InfoPanelId = 'description' | 'solutions' | 'submissions';
 type WorkPanelId = 'editor' | 'result' | 'tests' | 'history';
@@ -185,7 +186,6 @@ export class ProblemDetailComponent implements OnDestroy {
 
   readonly solutions = signal<SolutionUiModel[]>([]);
   readonly isLoadingSolutions = signal(false);
-  readonly solutionComposerOpen = signal(false);
 
   readonly submissions = signal<SubmissionDetail[]>([]);
   readonly isLoadingSubmissions = signal(false);
@@ -193,16 +193,15 @@ export class ProblemDetailComponent implements OnDestroy {
   readonly sampleRunResults = signal<SampleRunResult[]>([]);
   readonly selectedSampleIndex = signal(0);
 
+  readonly expandedSolution = computed(() => this.solutions().find(s => s.isExpanded));
+
   readonly rootCommentDrafts = signal<Record<string, string>>({});
   readonly replyDrafts = signal<Record<string, string>>({});
   readonly openReplyComposers = signal<Record<string, boolean>>({});
+  readonly editDrafts = signal<Record<string, string>>({});
+  readonly editingComments = signal<Record<string, boolean>>({});
   readonly pendingCommentTargets = signal<Record<string, boolean>>({});
   readonly pendingVoteTargets = signal<Record<string, boolean>>({});
-
-  readonly solutionForm = this.fb.nonNullable.group({
-    title: ['', [Validators.required, Validators.minLength(10), Validators.maxLength(100)]],
-    content: ['', [Validators.required, Validators.minLength(50), Validators.maxLength(10000)]]
-  });
 
   readonly editorOptions = computed(() => {
     const languageOption =
@@ -529,7 +528,6 @@ export class ProblemDetailComponent implements OnDestroy {
     this.lastSubmission.set(null);
     this.sampleRunResults.set([]);
     this.selectedSampleIndex.set(0);
-    this.solutionComposerOpen.set(false);
     this.rootCommentDrafts.set({});
     this.replyDrafts.set({});
     this.openReplyComposers.set({});
@@ -550,6 +548,7 @@ export class ProblemDetailComponent implements OnDestroy {
         this.problem.set(problem);
         this.code.set(this.getStarterCode());
         this.isLoadingProblem.set(false);
+        this.checkInitialActiveTabs();
       },
       error: error => {
         const message = getApiErrorMessage(error, 'Unable to load this problem right now.');
@@ -580,6 +579,24 @@ export class ProblemDetailComponent implements OnDestroy {
         console.error('Fallback: Unable to copy', err);
       }
       document.body.removeChild(textArea);
+    }
+  }
+
+  checkInitialActiveTabs() {
+    const zones = this.dockZones();
+    let shouldLoadSolutions = false;
+    let shouldLoadSubmissions = false;
+    
+    for (const key of Object.keys(zones) as DockZoneId[]) {
+      if (zones[key].activeTab === 'solutions') shouldLoadSolutions = true;
+      if (zones[key].activeTab === 'submissions') shouldLoadSubmissions = true;
+    }
+
+    if (shouldLoadSolutions && this.solutions().length === 0) {
+      this.loadSolutions();
+    }
+    if (shouldLoadSubmissions && this.submissions().length === 0) {
+      this.loadSubmissions();
     }
   }
 
@@ -682,7 +699,7 @@ export class ProblemDetailComponent implements OnDestroy {
   updateCode(value: string) {
     this.code.set(value || '');
     if (typeof localStorage !== 'undefined') {
-      const problemId = this.problemId();
+      const problemId = this.problem()?.id || this.problemId();
       const lang = this.editorLanguage();
       if (problemId && lang) {
         localStorage.setItem(`compylr.code.${problemId}.${lang}`, value || '');
@@ -733,7 +750,7 @@ export class ProblemDetailComponent implements OnDestroy {
   }
 
   loadSubmissions(force = false) {
-    const problemId = this.problemId();
+    const problemId = this.problem()?.id || this.problemId();
     if (!problemId || !this.authService.isLoggedIn$()) {
       return;
     }
@@ -784,7 +801,7 @@ export class ProblemDetailComponent implements OnDestroy {
   }
 
   loadSubmissionsAndSelectFirst() {
-    const problemId = this.problemId();
+    const problemId = this.problem()?.id || this.problemId();
     if (!problemId) return;
     
     this.isLoadingSubmissions.set(true);
@@ -805,7 +822,7 @@ export class ProblemDetailComponent implements OnDestroy {
   }
 
   loadSolutions(force = false) {
-    const problemId = this.problemId();
+    const problemId = this.problem()?.id || this.problemId();
     if (!problemId) {
       return;
     }
@@ -827,62 +844,9 @@ export class ProblemDetailComponent implements OnDestroy {
     });
   }
 
-  toggleSolutionComposer() {
-    if (!this.ensureAuthenticated('Sign in to publish your own solution write-up.')) {
-      return;
-    }
 
-    this.openDockPanel('solutions');
-    this.solutionComposerOpen.update(value => !value);
-  }
 
-  publishSolution() {
-    const problem = this.problem();
-    if (!problem) {
-      return;
-    }
 
-    if (!this.ensureAuthenticated('Sign in to publish your own solution write-up.')) {
-      return;
-    }
-
-    if (this.solutionForm.invalid) {
-      this.solutionForm.markAllAsTouched();
-      return;
-    }
-
-    const payload = this.solutionForm.getRawValue();
-
-    this.communityService
-      .createSolution({
-        problemId: problem.id,
-        title: payload.title,
-        content: payload.content
-      })
-      .subscribe({
-        next: summary => {
-          const solution: SolutionUiModel = {
-            ...this.toSolutionUiModel(summary),
-            detail: {
-              ...summary,
-              content: payload.content
-            },
-            isExpanded: true
-          };
-
-          this.solutions.update(current => [solution, ...current]);
-          this.solutionForm.reset({
-            title: '',
-            content: ''
-          });
-          this.solutionComposerOpen.set(false);
-          this.toastService.success('Your solution is live.');
-        },
-        error: error => {
-          this.toastService.error(getApiErrorMessage(error, 'Unable to publish your solution.'));
-        }
-      });
-  }
 
   toggleSolution(solutionId: string) {
     const solution = this.solutions().find(item => item.id === solutionId);
@@ -902,6 +866,36 @@ export class ProblemDetailComponent implements OnDestroy {
         this.loadComments(solutionId, 1, false);
       }
     }
+  }
+
+  getPreviousSolution(solutionId: string): SolutionUiModel | null {
+    const solutions = this.solutions();
+    const index = solutions.findIndex(s => s.id === solutionId);
+    if (index > 0) {
+      return solutions[index - 1];
+    }
+    return null;
+  }
+
+  getNextSolution(solutionId: string): SolutionUiModel | null {
+    const solutions = this.solutions();
+    const index = solutions.findIndex(s => s.id === solutionId);
+    if (index >= 0 && index < solutions.length - 1) {
+      return solutions[index + 1];
+    }
+    return null;
+  }
+
+  goToSolution(currentId: string, targetId: string) {
+    this.patchSolution(currentId, current => ({ ...current, isExpanded: false }));
+    this.toggleSolution(targetId);
+    
+    setTimeout(() => {
+      const element = document.getElementById(`solution-${targetId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 50);
   }
 
   loadSolutionDetail(solutionId: string) {
@@ -983,6 +977,53 @@ export class ProblemDetailComponent implements OnDestroy {
     this.openReplyComposers.update(current => ({ ...current, [commentId]: !current[commentId] }));
   }
 
+  toggleCommentEdit(commentId: string, currentContent: string) {
+    if (!this.ensureAuthenticated('Sign in to edit your comment.')) return;
+    this.editingComments.update(s => ({ ...s, [commentId]: !s[commentId] }));
+    if (this.editingComments()[commentId]) {
+      this.editDrafts.update(s => ({ ...s, [commentId]: currentContent }));
+    }
+  }
+
+  setEditDraft(commentId: string, value: string) {
+    this.editDrafts.update(s => ({ ...s, [commentId]: value }));
+  }
+
+  editComment(solutionId: string, commentId: string) {
+    const draft = this.editDrafts()[commentId];
+    if (!draft || draft.trim().length === 0) return;
+
+    this.setPendingState(this.pendingCommentTargets, `edit:${commentId}`, true);
+
+    this.communityService.updateComment(commentId, { content: draft }).subscribe({
+      next: updated => {
+        this.patchSolution(solutionId, solution => {
+          const newComments = this.replaceComment(solution.comments, updated);
+          return { ...solution, comments: newComments };
+        });
+        this.editingComments.update(s => ({ ...s, [commentId]: false }));
+        this.setPendingState(this.pendingCommentTargets, `edit:${commentId}`, false);
+        this.toastService.success('Comment updated successfully.');
+      },
+      error: err => {
+        this.toastService.error(getApiErrorMessage(err, 'Failed to update comment.'));
+        this.setPendingState(this.pendingCommentTargets, `edit:${commentId}`, false);
+      }
+    });
+  }
+
+  private replaceComment(comments: CommentViewModel[], updated: CommentViewModel): CommentViewModel[] {
+    return comments.map(c => {
+      if (c.id === updated.id) {
+        return { ...c, content: updated.content };
+      }
+      if (c.replies && c.replies.length > 0) {
+        return { ...c, replies: this.replaceComment(c.replies, updated) };
+      }
+      return c;
+    });
+  }
+
   postRootComment(solutionId: string) {
     this.publishComment(solutionId, null, this.rootCommentDraft(solutionId));
   }
@@ -1010,6 +1051,7 @@ export class ProblemDetailComponent implements OnDestroy {
         entityType: 'Solution',
         isUpvote
       })
+      .pipe(finalize(() => this.setPendingState(this.pendingVoteTargets, pendingKey, false)))
       .subscribe({
         next: voteCount => {
           const nextVote = currentVote === (isUpvote ? 'up' : 'down') ? null : isUpvote ? 'up' : 'down';
@@ -1022,8 +1064,7 @@ export class ProblemDetailComponent implements OnDestroy {
         },
         error: error => {
           this.toastService.error(getApiErrorMessage(error, 'Unable to record your vote.'));
-        },
-        complete: () => this.setPendingState(this.pendingVoteTargets, pendingKey, false)
+        }
       });
   }
 
@@ -1046,6 +1087,7 @@ export class ProblemDetailComponent implements OnDestroy {
         entityType: 'Comment',
         isUpvote
       })
+      .pipe(finalize(() => this.setPendingState(this.pendingVoteTargets, pendingKey, false)))
       .subscribe({
         next: voteCount => {
           const nextVote = currentVote === (isUpvote ? 'up' : 'down') ? null : isUpvote ? 'up' : 'down';
@@ -1061,8 +1103,7 @@ export class ProblemDetailComponent implements OnDestroy {
         },
         error: error => {
           this.toastService.error(getApiErrorMessage(error, 'Unable to record your vote.'));
-        },
-        complete: () => this.setPendingState(this.pendingVoteTargets, pendingKey, false)
+        }
       });
   }
 
@@ -1075,7 +1116,11 @@ export class ProblemDetailComponent implements OnDestroy {
   }
 
   formatRelativeTime(value: string) {
-    const timestamp = new Date(value).getTime();
+    let dateStr = value;
+    if (!dateStr.endsWith('Z') && !dateStr.match(/[+-]\d{2}:?\d{2}$/)) {
+      dateStr += 'Z';
+    }
+    const timestamp = new Date(dateStr).getTime();
     const now = Date.now();
     const diff = Math.round((timestamp - now) / 1000);
     const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
@@ -1138,6 +1183,7 @@ export class ProblemDetailComponent implements OnDestroy {
         parentCommentId,
         content: trimmedContent
       })
+      .pipe(finalize(() => this.setPendingState(this.pendingCommentTargets, pendingKey, false)))
       .subscribe({
         next: comment => {
           this.patchSolution(solutionId, solution => {
@@ -1166,10 +1212,55 @@ export class ProblemDetailComponent implements OnDestroy {
           }
         },
         error: error => {
-          this.toastService.error(getApiErrorMessage(error, 'Unable to publish your comment.'));
-        },
-        complete: () => this.setPendingState(this.pendingCommentTargets, pendingKey, false)
+          console.error('Comment error:', error);
+          this.toastService.error('Unable to publish your comment.');
+        }
       });
+  }
+
+  deleteSolution(solutionId: string, event: Event) {
+    event.stopPropagation();
+    if (!confirm('Are you sure you want to delete this solution? This cannot be undone.')) {
+      return;
+    }
+    this.communityService.deleteSolution(solutionId).subscribe({
+      next: () => {
+        this.solutions.update(current => current.filter(s => s.id !== solutionId));
+        this.toastService.success('Solution deleted');
+      },
+      error: () => this.toastService.error('Failed to delete solution')
+    });
+  }
+
+  deleteComment(commentId: string) {
+    if (!confirm('Are you sure you want to delete this comment?')) {
+      return;
+    }
+    this.communityService.deleteComment(commentId).subscribe({
+      next: () => {
+        // Soft delete locally to avoid full reload
+        this.solutions.update(current => 
+          current.map(solution => {
+            const newComments = this.softDeleteCommentFromTree(solution.comments, commentId);
+            return { ...solution, comments: newComments };
+          })
+        );
+        this.toastService.success('Comment deleted');
+      },
+      error: () => this.toastService.error('Failed to delete comment')
+    });
+  }
+
+  private softDeleteCommentFromTree(comments: CommentViewModel[], commentId: string): CommentViewModel[] {
+    return comments.map(c => {
+      if (c.id === commentId) {
+        return { ...c, content: '[Deleted by user]', authorUsername: '[Deleted]' };
+      }
+      if (c.replies && c.replies.length > 0) {
+        return { ...c, replies: this.softDeleteCommentFromTree(c.replies, commentId) };
+      }
+      return c;
+    });
   }
 
   private findCommentVote(solutionId: string, commentId: string): VoteChoice {
@@ -1207,7 +1298,7 @@ export class ProblemDetailComponent implements OnDestroy {
   }
 
   private getStarterCode() {
-    const problemId = this.problemId();
+    const problemId = this.problem()?.id || this.problemId();
     const lang = this.editorLanguage();
 
     if (typeof localStorage !== 'undefined' && problemId && lang) {
@@ -1627,5 +1718,21 @@ export class ProblemDetailComponent implements OnDestroy {
       }
     }
     return [60, 40];
+  }
+
+  stripHtml(html: string): string {
+    if (!html) return '';
+    return html.replace(/<[^>]*>?/gm, '');
+  }
+
+  canEdit(authorUsername: string): boolean {
+    if (!authorUsername || authorUsername === '[Deleted]') return false;
+    const user = this.authService.currentUser$();
+    return !!(user && user.username?.trim().toLowerCase() === authorUsername.trim().toLowerCase());
+  }
+
+  canDelete(authorUsername: string): boolean {
+    if (!authorUsername || authorUsername === '[Deleted]') return false;
+    return this.authService.isAdmin$() || this.canEdit(authorUsername);
   }
 }

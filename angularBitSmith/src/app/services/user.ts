@@ -15,6 +15,10 @@ export class UserService {
     return this.http.get<UserProfile>(`${this.apiUrl}/me`);
   }
 
+  getProfileByUsername(username: string): Observable<UserProfile> {
+    return this.http.get<UserProfile>(`${this.apiUrl}/username/${username}`);
+  }
+
   updateMyProfile(payload: UserProfileUpdateRequest): Observable<UserProfile> {
     return this.http.put<UserProfile>(`${this.apiUrl}/me`, payload);
   }

@@ -44,8 +44,7 @@ namespace dotnetBitSmith.Services {
             await _context.SaveChangesAsync();
 
             var user = await _context.Users.FindAsync(userId);
-            var username = user != null ? (user.DisplayName ?? user.Username) : "Unknown";
-            // var VoteCount = await _context.Votes.FindAsync();
+            var username = user != null ? user.Username : "Unknown";
 
             return new CommentViewModel {
                 Id = newComment.Id,
@@ -61,9 +60,6 @@ namespace dotnetBitSmith.Services {
         public async Task<IEnumerable<CommentViewModel>> GetCommentsForSolutionAsync(Guid solutionId, CommentParametersModel parameters) {
             _logger.LogInformation("Fetching comments for Solution {SolutionId}, Page {Page}, Size {Size}", solutionId, parameters.PageNumber, parameters.PageSize);
 
-            // Fetch ALL comments for this solution in ONE query ---
-            // Include User for the username, and Votes for the count.
-
             if (!await _context.Solutions.AnyAsync(s => s.Id == solutionId)) {
                 throw new NotFoundException($"Solution with ID {solutionId} not found.");
             }
@@ -78,33 +74,24 @@ namespace dotnetBitSmith.Services {
                 .Select(c => c.Id)
                 .ToListAsync();
 
-
-            // 2. Fetch ALL comments (roots + replies) that are part of these threads
-            // Ideally, we'd use a recursive CTE here for infinite depth, but for V1, 
-            // fetching all comments for the solution and filtering in memory is efficient enough for moderate sizes.
-            var allComments = await _context.Comments
-                .Include(c => c.User)
-                .Include(c => c.Votes)
+            var allCommentViewModels = await _context.Comments
                 .Where(c => c.SolutionId == solutionId) // Get everything for the solution
                 .OrderBy(c => c.CreatedAt)
+                .Select(c => new CommentViewModel {
+                    Id = c.Id,
+                    SolutionId = c.SolutionId,
+                    ParentCommentId = c.ParentCommentId,
+                    Content = c.Content,
+                    AuthorUsername = c.User != null ? c.User.Username : "Unknown",
+                    CreatedAt = c.CreatedAt,
+                    VoteCount = _context.Votes.Count(v => v.EntityId == c.Id && v.IsUpvote) - _context.Votes.Count(v => v.EntityId == c.Id && !v.IsUpvote)
+                })
                 .AsNoTracking()
                 .ToListAsync();
 
             // 3. Build the Lookup
             var commentLookup = new Dictionary<Guid, CommentViewModel>();
-            var allCommentViewModels = new List<CommentViewModel>();
-
-            foreach (var comment in allComments) {
-                var commentVM = new CommentViewModel {
-                    Id = comment.Id,
-                    SolutionId = comment.SolutionId,
-                    ParentCommentId = comment.ParentCommentId,
-                    Content = comment.Content,
-                    AuthorUsername = comment.User != null ? (comment.User.DisplayName ?? comment.User.Username) : "Unknown",
-                    CreatedAt = comment.CreatedAt,
-                    VoteCount = comment.Votes.Count(v => v.IsUpvote) - comment.Votes.Count(v => !v.IsUpvote)
-                };
-                allCommentViewModels.Add(commentVM);
+            foreach (var commentVM in allCommentViewModels) {
                 commentLookup.Add(commentVM.Id, commentVM);
             }
 
@@ -128,6 +115,41 @@ namespace dotnetBitSmith.Services {
 
             // Re-sort the final list to ensure correct page order
             return pagedResults.OrderByDescending(c => c.CreatedAt);
+        }
+
+        public async Task<CommentViewModel> UpdateCommentAsync(Guid id, Guid userId, CommentUpdateModel model) {
+            var comment = await _context.Comments.Include(c => c.User).FirstOrDefaultAsync(c => c.Id == id)
+                ?? throw new NotFoundException("Comment with ID " + id + " not found.");
+
+            if (comment.UserId != userId) {
+                throw new UnauthorizedAccessException("You are not authorized to edit this comment.");
+            }
+
+            comment.Content = model.Content;
+            await _context.SaveChangesAsync();
+
+            return new CommentViewModel {
+                Id = comment.Id,
+                SolutionId = comment.SolutionId,
+                ParentCommentId = comment.ParentCommentId,
+                Content = comment.Content,
+                AuthorUsername = comment.User != null ? comment.User.Username : "[Deleted]",
+                CreatedAt = comment.CreatedAt,
+                VoteCount = _context.Votes.Count(v => v.EntityId == comment.Id && v.IsUpvote) - _context.Votes.Count(v => v.EntityId == comment.Id && !v.IsUpvote)
+            };
+        }
+
+        public async Task DeleteCommentAsync(Guid id, Guid userId, bool isAdmin = false) {
+            var comment = await _context.Comments.FindAsync(id)
+                ?? throw new NotFoundException("Comment with ID " + id + " not found.");
+
+            if (comment.UserId != userId && comment.UserId != null && !isAdmin) {
+                throw new UnauthorizedAccessException("You are not authorized to delete this comment.");
+            }
+
+            comment.Content = "[Deleted by user]";
+            comment.UserId = null;
+            await _context.SaveChangesAsync();
         }
 
     }

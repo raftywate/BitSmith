@@ -2,13 +2,15 @@ import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterModule } from '@angular/router';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { UserProfile } from '../models/user-profile';
 import { UserService } from '../services/user';
 import { ToastService } from '../services/toast';
 import { getApiErrorMessage } from '../utils/api-error';
 import { AuthService } from '../services/auth';
 import { ProblemService } from '../services/problem';
+import { CommunityService } from '../services/community';
+import { SolutionSummary } from '../models/community';
 
 @Component({
   selector: 'app-profile',
@@ -21,8 +23,11 @@ export class ProfileComponent {
   private readonly toastService = inject(ToastService);
   private readonly fb = inject(FormBuilder);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly authService = inject(AuthService);
+  protected readonly authService = inject(AuthService);
   private readonly problemService = inject(ProblemService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly communityService = inject(CommunityService);
 
   totalProblems = signal<number>(0);
   totalEasy = signal<number>(0);
@@ -30,6 +35,7 @@ export class ProfileComponent {
   totalHard = signal<number>(0);
   profile = signal<UserProfile | null>(null);
   isLoading = signal(true);
+  profileNotFound = signal(false);
   isSaving = signal(false);
   isEditing = signal(false);
   isUploadingAvatar = signal(false);
@@ -41,6 +47,16 @@ export class ProfileComponent {
   avatarOffsetX = signal(0);
   avatarOffsetY = signal(0);
   avatarError = signal<string | null>(null);
+
+  activeTab = signal<'recent-ac' | 'solutions'>('recent-ac');
+  solutions = signal<SolutionSummary[]>([]);
+  isLoadingSolutions = signal(false);
+
+  isOwner = computed(() => {
+    const current = this.authService.currentUser$()?.username;
+    const profileUser = this.profile()?.username;
+    return !!current && !!profileUser && current.toLowerCase() === profileUser.toLowerCase();
+  });
 
   profileForm: FormGroup = this.fb.nonNullable.group({
     displayName: ['', Validators.maxLength(100)],
@@ -112,21 +128,59 @@ export class ProfileComponent {
       }
     });
 
+    this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
+      const username = params.get('username');
+      if (!username) {
+        const currentUser = this.authService.currentUser$();
+        if (currentUser) {
+          void this.router.navigate(['/', currentUser.username], { replaceUrl: true });
+        } else {
+          void this.router.navigate(['/login']);
+        }
+        return;
+      }
+      this.loadProfile(username);
+    });
+  }
+
+  loadProfile(username: string) {
+    this.isLoading.set(true);
+    this.profileNotFound.set(false);
     this.userService
-      .getMyProfile()
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .getProfileByUsername(username)
       .subscribe({
         next: profile => {
           this.profile.set(profile);
-          this.authService.updateCurrentUserProfilePicture(profile.profilePictureUrl);
+          if (this.isOwner()) {
+            this.authService.updateCurrentUserProfilePicture(profile.profilePictureUrl);
+          }
           this.syncProfileForm(profile);
           this.isLoading.set(false);
+          this.loadSolutions(username);
         },
         error: error => {
-          this.toastService.error(getApiErrorMessage(error, 'Unable to load your profile.'));
+          if (error?.status === 404) {
+            this.profileNotFound.set(true);
+          } else {
+            this.toastService.error(getApiErrorMessage(error, 'Unable to load profile.'));
+          }
           this.isLoading.set(false);
         }
       });
+  }
+
+  loadSolutions(username: string) {
+    this.isLoadingSolutions.set(true);
+    this.communityService.getSolutionsByUser(username).subscribe({
+      next: sols => {
+        this.solutions.set(sols);
+        this.isLoadingSolutions.set(false);
+      },
+      error: err => {
+        console.error('Failed to load user solutions:', err);
+        this.isLoadingSolutions.set(false);
+      }
+    });
   }
 
   saveProfile() {
@@ -163,7 +217,15 @@ export class ProfileComponent {
     return source.slice(0, 2).toUpperCase();
   }
 
+  stripHtml(html: string): string {
+    if (!html) return '';
+    return html.replace(/<[^>]*>?/gm, '');
+  }
+
   startEditing() {
+    if (!this.isOwner()) {
+      return;
+    }
     const profile = this.profile();
     if (!profile) {
       return;
@@ -229,6 +291,9 @@ export class ProfileComponent {
   }
 
   async saveAvatarEdit() {
+    if (!this.isOwner()) {
+      return;
+    }
     const dataUrl = this.selectedAvatarDataUrl();
     if (!dataUrl) {
       return;
@@ -265,6 +330,9 @@ export class ProfileComponent {
   }
 
   removeAvatar() {
+    if (!this.isOwner()) {
+      return;
+    }
     this.avatarError.set(null);
     this.isUploadingAvatar.set(true);
 

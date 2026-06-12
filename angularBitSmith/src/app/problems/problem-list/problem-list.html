@@ -195,7 +195,7 @@
       </div>
 
       @if (pod()) {
-      <button type="button" class="problem-row" [class.problem-row--logged-in]="authService.isLoggedIn$()" (click)="openInNewTab(pod()!.id)" style="background: var(--surface-2); border-left: 3px solid #00b8a3; margin-bottom: 0.5rem; padding-left: 0.8rem;">
+      <button type="button" class="problem-row" [class.problem-row--logged-in]="authService.isLoggedIn$()" (click)="openInNewTab(pod()!.slug || pod()!.id, getTodayStr())" style="background: var(--surface-2); border-left: 3px solid #00b8a3; margin-bottom: 0.5rem; padding-left: 0.8rem;">
         @if (authService.isLoggedIn$()) {
           <span class="problem-row__status" style="display: flex; align-items: center; justify-content: center;">
             @if (pod()?.status === 'Solved') {
@@ -232,9 +232,9 @@
         </span>
       </button>
       }
-
+ 
       @for (problem of problems(); track problem.id) {
-      <button type="button" class="problem-row" [class.problem-row--logged-in]="authService.isLoggedIn$()" (click)="open(problem.id)">
+      <button type="button" class="problem-row" [class.problem-row--logged-in]="authService.isLoggedIn$()" (click)="open(problem.slug || problem.id)">
         @if (authService.isLoggedIn$()) {
           <span class="problem-row__status" style="display: flex; align-items: center; justify-content: center;">
             @if (problem.status === 'Solved') {

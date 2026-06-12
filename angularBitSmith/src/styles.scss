@@ -332,3 +332,99 @@ blockquote {
   margin-block-end: 0.6rem;
   color: var(--text-muted);
 }
+
+.markdown-body pre {
+  background: var(--editor-bg);
+  border: 1px solid var(--editor-border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text-strong);
+  white-space: pre;
+}
+
+.markdown-body code {
+  background: var(--surface-2);
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  color: var(--accent);
+}
+
+.markdown-body pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  color: inherit;
+}
+
+/* Custom Code Tabs */
+.code-tabs {
+  background: var(--editor-bg);
+  border: 1px solid var(--editor-border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  margin: 1rem 0;
+
+  input[type="radio"] {
+    display: none;
+  }
+}
+
+.code-tabs__labels {
+  display: flex;
+  background: color-mix(in srgb, var(--surface-1) 50%, var(--editor-bg));
+  border-bottom: 1px solid var(--editor-border);
+  padding: 0 0.5rem;
+  
+  label {
+    padding: 0.65rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+    text-transform: capitalize;
+
+    &:hover {
+      color: var(--text-strong);
+    }
+  }
+}
+
+.code-tab-pane {
+  display: none;
+  
+  /* Reset pre styling within panes so we don't double border */
+  pre {
+    margin: 0;
+    border: none;
+    border-radius: 0;
+  }
+}
+
+/* Tab logic for up to 10 tabs */
+.code-tabs input[id$="-0"]:checked ~ .code-tabs__panes .pane-0,
+.code-tabs input[id$="-1"]:checked ~ .code-tabs__panes .pane-1,
+.code-tabs input[id$="-2"]:checked ~ .code-tabs__panes .pane-2,
+.code-tabs input[id$="-3"]:checked ~ .code-tabs__panes .pane-3,
+.code-tabs input[id$="-4"]:checked ~ .code-tabs__panes .pane-4,
+.code-tabs input[id$="-5"]:checked ~ .code-tabs__panes .pane-5 {
+  display: block;
+}
+
+.code-tabs input[id$="-0"]:checked ~ .code-tabs__labels label[for$="-0"],
+.code-tabs input[id$="-1"]:checked ~ .code-tabs__labels label[for$="-1"],
+.code-tabs input[id$="-2"]:checked ~ .code-tabs__labels label[for$="-2"],
+.code-tabs input[id$="-3"]:checked ~ .code-tabs__labels label[for$="-3"],
+.code-tabs input[id$="-4"]:checked ~ .code-tabs__labels label[for$="-4"],
+.code-tabs input[id$="-5"]:checked ~ .code-tabs__labels label[for$="-5"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+

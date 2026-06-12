@@ -34,6 +34,5 @@ namespace dotnetBitSmith.Entities {
         public virtual Comment ParentComment { get; set; }
 
         public ICollection<Comment> Replies { get; set; } = new List<Comment>();
-        public ICollection<Vote> Votes { get; set; } = new List<Vote>();
     }
 }

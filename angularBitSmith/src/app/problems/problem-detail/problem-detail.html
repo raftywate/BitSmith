@@ -275,38 +275,16 @@
           <p class="tab-panel__eyebrow">Community</p>
           <h2>Solutions</h2>
         </div>
-        <button type="button" class="btn btn--primary" (click)="toggleSolutionComposer()">
-          {{ solutionComposerOpen() ? 'Close composer' : 'Write a solution' }}
-        </button>
+        <a class="btn btn--primary" [routerLink]="['/problems', problem()?.id, 'solutions', 'new']">
+          Write a solution
+        </a>
       </div>
 
       <p class="tab-panel__intro">
         Read other approaches, then drag this tab below the prompt or code if you want the discussion visible while you work.
       </p>
 
-      @if (solutionComposerOpen()) {
-      <form class="composer panel" [formGroup]="solutionForm" (ngSubmit)="publishSolution()">
-        <label class="field">
-          <span class="field__label">Title</span>
-          <input class="input" type="text" formControlName="title"
-            placeholder="Explain the core idea in one strong sentence" />
-          @if (solutionForm.controls.title.invalid && solutionForm.controls.title.touched) {
-          <p class="field__error">Use a title between 10 and 100 characters.</p>
-          }
-        </label>
 
-        <label class="field">
-          <span class="field__label">Your explanation</span>
-          <textarea class="textarea" formControlName="content"
-            placeholder="Walk through your approach, tradeoffs, and why it works."></textarea>
-          @if (solutionForm.controls.content.invalid && solutionForm.controls.content.touched) {
-          <p class="field__error">Write at least 50 characters so the explanation is useful.</p>
-          }
-        </label>
-
-        <button type="submit" class="btn btn--primary">Publish solution</button>
-      </form>
-      }
 
       @if (isLoadingSolutions()) {
       <div class="workspace-page__skeleton-stack">
@@ -321,16 +299,30 @@
       } @else if (!solutions().length) {
       <div class="empty-state">No community solutions yet. Be the first to set the tone for this problem.</div>
       } @else {
+      @if (expandedSolution(); as activeSolution) {
+        <button type="button" class="btn btn--subtle" style="margin-bottom: 1rem; display: inline-flex; align-items: center; gap: 0.4rem;" (click)="toggleSolution(activeSolution.id)">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5"></path><polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+          Back to solutions
+        </button>
+      }
+
       @for (solution of solutions(); track solution.id) {
-      <article class="solution-card panel">
+        @if (!expandedSolution() || expandedSolution()?.id === solution.id) {
+        <article class="solution-card panel" [id]="'solution-' + solution.id">
         <div class="solution-card__summary">
           <div class="solution-card__copy" (click)="toggleSolution(solution.id)">
-            <div class="solution-card__meta">
-              <span>{{ solution.authorName }}</span>
-              <span>{{ formatRelativeTime(solution.createdAt) }}</span>
+            <div class="solution-card__meta" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <div style="display: flex; align-items: center;">
+                <a [routerLink]="['/', solution.authorUsername]" (click)="$event.stopPropagation()" style="font-weight: 700; color: var(--accent); text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">{{ solution.authorUsername }}</a>
+                <span style="margin-left: 0.5rem; color: var(--text-muted); font-size: 0.85rem;">{{ formatRelativeTime(solution.createdAt) }}</span>
+              </div>
             </div>
             <h3>{{ solution.title }}</h3>
-            <p>{{ solution.excerpt }}</p>
+            @if (!expandedSolution()) {
+            <p>{{ stripHtml(solution.excerpt) }}</p>
+            }
           </div>
 
           <div class="solution-card__actions">
@@ -343,9 +335,22 @@
               (click)="voteOnSolution(solution.id, false)">
               ▼
             </button>
-            <button type="button" class="btn btn--subtle" (click)="toggleSolution(solution.id)">
-              {{ solution.isExpanded ? 'Collapse' : 'Open' }}
-            </button>
+
+            
+            <div style="flex: 1"></div>
+
+            @if (canDelete(solution.authorUsername)) {
+            <div class="solution-actions" style="display: flex; gap: 8px;">
+              @if (canEdit(solution.authorUsername)) {
+              <button type="button" class="btn btn--icon" title="Edit" [routerLink]="['/problems', problem()?.id, 'solutions', solution.id, 'edit']" (click)="$event.stopPropagation()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+              </button>
+              }
+              <button type="button" class="btn btn--icon" title="Delete" style="color: var(--error);" (click)="deleteSolution(solution.id, $event)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </button>
+            </div>
+            }
           </div>
         </div>
 
@@ -356,7 +361,7 @@
             <app-skeleton width="100%" height="7rem"></app-skeleton>
           </div>
           } @else if (solution.detail) {
-          <div class="workspace-copy workspace-copy--solution">{{ solution.detail.content }}</div>
+          <div class="workspace-copy workspace-copy--solution markdown-body" [innerHTML]="solution.detail.content | mdRender"></div>
           }
 
           <div class="comments-card panel">
@@ -407,9 +412,33 @@
             </button>
             }
           </div>
+
+          <div class="solution-navigation" style="display: flex; justify-content: space-between; margin-top: 1.5rem;">
+            <!-- Prev -->
+            @if (getPreviousSolution(solution.id); as prev) {
+              <button class="btn btn--secondary" (click)="goToSolution(solution.id, prev.id)" style="max-width: 48%; text-align: left; display: flex; flex-direction: column; align-items: flex-start; padding: 0.75rem 1rem;">
+                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.25rem;">Previous Solution</span>
+                <span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%;">{{ prev.title }}</span>
+              </button>
+            } @else {
+              <div></div>
+            }
+
+            <!-- Next -->
+            @if (getNextSolution(solution.id); as next) {
+              <button class="btn btn--secondary" (click)="goToSolution(solution.id, next.id)" style="max-width: 48%; text-align: right; display: flex; flex-direction: column; align-items: flex-end; padding: 0.75rem 1rem;">
+                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.25rem;">Next Solution</span>
+                <span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%;">{{ next.title }}</span>
+              </button>
+            } @else {
+              <div></div>
+            }
+          </div>
+
         </div>
         }
       </article>
+      }
       }
       }
     </section>
@@ -707,15 +736,54 @@
 
   <ng-template #commentNode let-comment let-solutionId="solutionId" let-depth="depth">
     <article class="comment-node">
-      <div class="comment-node__header">
-        <span class="comment-node__avatar avatar-fallback">{{ comment.authorUsername.slice(0, 1).toUpperCase() }}</span>
-        <div>
-          <strong>{{ comment.authorUsername }}</strong>
-          <p>{{ formatRelativeTime(comment.createdAt) }}</p>
+      <div class="comment-node__header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div style="display: flex; gap: 0.75rem; align-items: center;">
+          <a [routerLink]="['/', comment.authorUsername]" (click)="$event.stopPropagation()" style="text-decoration: none; display: flex; align-items: center; gap: 0.75rem;">
+            <span class="comment-node__avatar avatar-fallback">{{ comment.authorUsername.slice(0, 1).toUpperCase() }}</span>
+            <div>
+              <strong style="color: var(--text-strong); display: block;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-strong)'">{{ comment.authorUsername }}</strong>
+              <p style="margin: 0; font-size: 0.78rem; color: var(--text-muted);">{{ formatRelativeTime(comment.createdAt) }}</p>
+            </div>
+          </a>
         </div>
+        @if (canDelete(comment.authorUsername)) {
+        <div class="comment-actions" style="display: flex; gap: 8px;">
+          @if (canEdit(comment.authorUsername)) {
+          <button type="button" class="btn btn--icon" style="padding: 4px;" (click)="toggleCommentEdit(comment.id, comment.content)" title="Edit comment">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+          </button>
+          }
+          <button type="button" class="btn btn--icon" style="padding: 4px; color: var(--error);" (click)="deleteComment(comment.id)" title="Delete comment">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+        </div>
+        }
       </div>
 
-      <p class="comment-node__content">{{ comment.content }}</p>
+      @if (editingComments()[comment.id]) {
+      <div class="comment-composer" style="margin-bottom: 0.5rem;">
+        <textarea class="textarea" [ngModel]="editDrafts()[comment.id]"
+          (ngModelChange)="setEditDraft(comment.id, $event)"
+          placeholder="Edit your comment..."></textarea>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn btn--primary" [disabled]="pendingCommentTargets()['edit:' + comment.id]"
+            (click)="editComment(solutionId, comment.id)">
+            Save Changes
+          </button>
+          <button type="button" class="btn btn--subtle" (click)="toggleCommentEdit(comment.id, comment.content)">
+            Cancel
+          </button>
+        </div>
+      </div>
+      } @else {
+      <div class="comment-node__content markdown-body" [innerHTML]="comment.content | mdRender"></div>
+      }
 
       <div class="comment-node__actions">
         <button type="button" class="vote-button" [class.vote-button--active]="comment.userVote === 'up'"

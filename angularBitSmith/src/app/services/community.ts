@@ -22,6 +22,10 @@ export class CommunityService {
     return this.http.get<SolutionSummary[]>(`${this.apiUrl}/solution/problem/${problemId}`);
   }
 
+  getSolutionsByUser(username: string): Observable<SolutionSummary[]> {
+    return this.http.get<SolutionSummary[]>(`${this.apiUrl}/solution/user/${username}`);
+  }
+
   getSolutionById(solutionId: string): Observable<SolutionDetail> {
     return this.http.get<SolutionDetail>(`${this.apiUrl}/solution/${solutionId}`);
   }
@@ -50,5 +54,21 @@ export class CommunityService {
 
   castVote(payload: VoteRequest): Observable<number> {
     return this.http.post<number>(`${this.apiUrl}/vote`, payload);
+  }
+
+  updateSolution(solutionId: string, payload: { title: string; content: string }): Observable<SolutionDetail> {
+    return this.http.put<SolutionDetail>(`${this.apiUrl}/solution/${solutionId}`, payload);
+  }
+
+  deleteSolution(solutionId: string): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/solution/${solutionId}`);
+  }
+
+  updateComment(commentId: string, payload: { content: string }): Observable<CommentViewModel> {
+    return this.http.put<CommentViewModel>(`${this.apiUrl}/comment/${commentId}`, payload);
+  }
+
+  deleteComment(commentId: string): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/comment/${commentId}`);
   }
 }

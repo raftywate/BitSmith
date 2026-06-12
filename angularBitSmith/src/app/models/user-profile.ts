@@ -7,6 +7,7 @@ export interface AcceptedProblem {
   id: string;
   problemNumber: number;
   title: string;
+  slug?: string;
   difficulty: 'Easy' | 'Medium' | 'Hard' | string;
   acceptedAt: string;
 }
