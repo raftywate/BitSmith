@@ -1,4 +1,4 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://bitsmith-backend.onrender.com/api'
+  apiUrl: 'https://compylr-backend.onrender.com/api'
 };
