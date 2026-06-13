@@ -52,8 +52,31 @@ builder.Services.AddSwaggerGen(options => {
     });
 });
 
-var connectionString = builder.Configuration.GetConnectionString("connectionString")
-    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+var connectionString = builder.Configuration.GetConnectionString("connectionString");
+if (string.IsNullOrEmpty(connectionString)) {
+    connectionString = Environment.GetEnvironmentVariable("DATABASE_URL");
+}
+
+if (string.IsNullOrEmpty(connectionString)) {
+    throw new InvalidOperationException("Connection string 'connectionString' or 'DATABASE_URL' not found.");
+}
+
+if (connectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) || 
+    connectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase)) {
+    try {
+        var uri = new Uri(connectionString);
+        var userInfo = uri.UserInfo.Split(':');
+        var username = userInfo[0];
+        var password = userInfo.Length > 1 ? userInfo[1] : string.Empty;
+        var host = uri.Host;
+        var port = uri.Port == -1 ? 5432 : uri.Port;
+        var database = uri.LocalPath.TrimStart('/');
+        
+        connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true;";
+    } catch (Exception ex) {
+        throw new FormatException("Failed to parse PostgreSQL URL connection string.", ex);
+    }
+}
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString));
