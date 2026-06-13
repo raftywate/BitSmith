@@ -20,12 +20,10 @@ dotnetBitSmith/**/Release/
 dotnetBitSmith/Migrations
 dotnetBitSmith/appsettings.Development.json
 
-# === Angular ===
 angularBitSmith/node_modules/
 angularBitSmith/dist/
 angularBitSmith/tmp/
 angularBitSmith/.angular/
-angularBitSmith/src/environments/*.ts
 
 # === System / IDE ===
 .vscode/

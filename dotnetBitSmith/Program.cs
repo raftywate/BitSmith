@@ -13,6 +13,9 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using dotnetBitSmith.Entities;
+using System.Net.Security;
+
+AppContext.SetSwitch("System.Net.DisableIPv6", true);
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Environment.WebRootPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot");
@@ -80,6 +83,7 @@ if (connectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCas
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString));
+
 
 builder.Services.AddRateLimiter(options => {
     options.AddPolicy("auth-policy", context => 
