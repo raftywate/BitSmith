@@ -14,6 +14,8 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using dotnetBitSmith.Entities;
 using System.Net.Security;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 
 AppContext.SetSwitch("System.Net.DisableIPv6", true);
 
@@ -225,10 +227,27 @@ if (args.Contains("--import-leetcode")) {
 using (var scope = app.Services.CreateScope()) {
     var services = scope.ServiceProvider;
     var context = services.GetRequiredService<ApplicationDbContext>();
-    context.Database.EnsureCreated();
+    var logger = services.GetRequiredService<ILogger<Program>>();
+
+    logger.LogInformation("Ensuring database tables are initialized...");
+    try {
+        context.Database.EnsureCreated();
+    } catch (Exception ex) {
+        logger.LogWarning(ex, "EnsureCreated failed or did not create tables. Attempting direct table creation...");
+    }
+
+    var databaseCreator = context.Database.GetService<IDatabaseCreator>() as IRelationalDatabaseCreator;
+    if (databaseCreator != null) {
+        try {
+            databaseCreator.CreateTables();
+            logger.LogInformation("Database tables created successfully.");
+        } catch (Exception ex) {
+            // Ignore error if tables already exist
+            logger.LogInformation("Database tables initialization check completed (tables may already exist): {Message}", ex.Message);
+        }
+    }
 
     // Recommendation C: Ensure index existence on local database
-    var logger = services.GetRequiredService<ILogger<Program>>();
     logger.LogInformation("Verifying and creating composite database indexes...");
     try {
         context.Database.ExecuteSqlRaw(@"
