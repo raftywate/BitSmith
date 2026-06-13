@@ -23,7 +23,7 @@ const string DEV_CORS_POLICY = "AllowDevOrigin";
 
 builder.Services.AddCors(options => {
     options.AddPolicy(name: DEV_CORS_POLICY, policy => {
-          policy.WithOrigins("http://localhost:4200")
+          policy.AllowAnyOrigin()
                 .AllowAnyHeader()
                 .AllowAnyMethod();
       });
