@@ -7,20 +7,15 @@ namespace dotnetBitSmith.Entities {
         public Guid Id { get; set; } = Guid.NewGuid();
 
         [Required]
-        [Column(TypeName = "nvarchar(max)")]
         public string Input { get; set; }
 
         [Required]
-        [Column(TypeName = "nvarchar(max)")]
         public string ExpectedOutput { get; set; }
 
-        [Column(TypeName = "nvarchar(max)")]
         public string? InputLabelsJson { get; set; }
 
         [Required]
         public bool IsHidden { get; set; }
-
-        //---Foreign Keys---
         [Required]
         public Guid ProblemId { get; set; }
         

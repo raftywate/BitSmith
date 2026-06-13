@@ -40,12 +40,14 @@
             <div class="workspace-header-actions">
                 <button type="button" class="btn btn--ghost btn--small"
                     (click)="workspaceActionService.requestRunSamples()"
-                    [disabled]="workspaceActionService.isRunningSamples()">
+                    [disabled]="workspaceActionService.isRunningSamples()"
+                    title="Ctrl + '">
                     {{ workspaceActionService.isRunningSamples() ? 'Running...' : 'Run' }}
                 </button>
                 <button type="button" class="btn btn--primary btn--small"
                     (click)="workspaceActionService.requestSubmit()"
-                    [disabled]="workspaceActionService.isSubmitting()">
+                    [disabled]="workspaceActionService.isSubmitting()"
+                    title="Ctrl + Enter">
                     {{ workspaceActionService.isSubmitting() ? 'Submitting...' : 'Submit' }}
                 </button>
             </div>

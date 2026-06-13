@@ -11,7 +11,6 @@ namespace dotnetBitSmith.Entities {
         public Guid EntityId { get; set; }
 
         [Required]
-        [Column(TypeName = "nvarchar(20)")]
         public VotableEntityType EntityType { get; set; }
 
         [Required]

@@ -15,7 +15,6 @@ namespace dotnetBitSmith.Entities {
         public string Language { get; set; }
 
         [Required]
-        [Column(TypeName = "nvarchar(max)")]
         public string Code { get; set; }
 
         [Required]

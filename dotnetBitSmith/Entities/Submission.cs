@@ -12,11 +12,9 @@ namespace dotnetBitSmith.Entities {
         public string Language { get; set; }
 
         [Required]
-        [Column(TypeName = "nvarchar(max)")]
         public string Code { get; set; }
 
         [Required]
-        [Column(TypeName = "nvarchar(20)")]
         public SubmissionStatus Status { get; set; }
 
         [Required]

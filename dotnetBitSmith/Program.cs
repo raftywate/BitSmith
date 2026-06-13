@@ -56,7 +56,7 @@ var connectionString = builder.Configuration.GetConnectionString("connectionStri
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseNpgsql(connectionString));
 
 builder.Services.AddRateLimiter(options => {
     options.AddPolicy("auth-policy", context => 
@@ -156,24 +156,10 @@ if (args.Contains("--import-leetcode")) {
             var filePath = Path.Combine(Directory.GetCurrentDirectory(), "problems.json");
             if (System.IO.File.Exists(filePath)) {
                 await context.Database.ExecuteSqlRawAsync(@"
-                    IF NOT EXISTS (
-                        SELECT * FROM sys.columns 
-                        WHERE object_id = OBJECT_ID(N'[dbo].[Problems]') 
-                        AND name = N'HintsJson'
-                    )
-                    BEGIN
-                        ALTER TABLE [dbo].[Problems] ADD [HintsJson] NVARCHAR(MAX) NULL;
-                    END
+                    ALTER TABLE ""Problems"" ADD COLUMN IF NOT EXISTS ""HintsJson"" TEXT NULL;
                 ");
                 await context.Database.ExecuteSqlRawAsync(@"
-                    IF NOT EXISTS (
-                        SELECT * FROM sys.columns 
-                        WHERE object_id = OBJECT_ID(N'[dbo].[TestCases]') 
-                        AND name = N'InputLabelsJson'
-                    )
-                    BEGIN
-                        ALTER TABLE [dbo].[TestCases] ADD [InputLabelsJson] NVARCHAR(MAX) NULL;
-                    END
+                    ALTER TABLE ""TestCases"" ADD COLUMN IF NOT EXISTS ""InputLabelsJson"" TEXT NULL;
                 ");
                 var jsonContent = System.IO.File.ReadAllText(filePath);
                 var result = dotnetBitSmith.Helpers.ProblemSeeder.SeedProblemsFromJsonAsync(
@@ -200,27 +186,13 @@ using (var scope = app.Services.CreateScope()) {
     logger.LogInformation("Verifying and creating composite database indexes...");
     try {
         context.Database.ExecuteSqlRaw(@"
-            IF NOT EXISTS (
-                SELECT * FROM sys.indexes 
-                WHERE name = 'IX_Submissions_UserId_ProblemId_Status_CreatedAt' 
-                AND object_id = OBJECT_ID('[dbo].[Submissions]')
-            )
-            BEGIN
-                CREATE INDEX IX_Submissions_UserId_ProblemId_Status_CreatedAt 
-                ON [dbo].[Submissions] (UserId, ProblemId, Status, CreatedAt);
-            END
+            CREATE INDEX IF NOT EXISTS ""IX_Submissions_UserId_ProblemId_Status_CreatedAt"" 
+            ON ""Submissions"" (""UserId"", ""ProblemId"", ""Status"", ""CreatedAt"");
         ");
 
         context.Database.ExecuteSqlRaw(@"
-            IF NOT EXISTS (
-                SELECT * FROM sys.indexes 
-                WHERE name = 'IX_ProblemOfTheDays_Date' 
-                AND object_id = OBJECT_ID('[dbo].[ProblemOfTheDays]')
-            )
-            BEGIN
-                CREATE INDEX IX_ProblemOfTheDays_Date 
-                ON [dbo].[ProblemOfTheDays] (Date);
-            END
+            CREATE INDEX IF NOT EXISTS ""IX_ProblemOfTheDays_Date"" 
+            ON ""ProblemOfTheDays"" (""Date"");
         ");
         logger.LogInformation("Database indexes verified successfully.");
     } catch (Exception ex) {
@@ -230,25 +202,11 @@ using (var scope = app.Services.CreateScope()) {
     logger.LogInformation("Verifying and adding User verification columns...");
     try {
         context.Database.ExecuteSqlRaw(@"
-            IF NOT EXISTS (
-                SELECT * FROM sys.columns 
-                WHERE object_id = OBJECT_ID(N'[dbo].[Users]') 
-                AND name = N'EmailVerificationOtp'
-            )
-            BEGIN
-                ALTER TABLE [dbo].[Users] ADD [EmailVerificationOtp] NVARCHAR(10) NULL;
-            END
+            ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""EmailVerificationOtp"" VARCHAR(10) NULL;
         ");
 
         context.Database.ExecuteSqlRaw(@"
-            IF NOT EXISTS (
-                SELECT * FROM sys.columns 
-                WHERE object_id = OBJECT_ID(N'[dbo].[Users]') 
-                AND name = N'EmailVerificationOtpExpiry'
-            )
-            BEGIN
-                ALTER TABLE [dbo].[Users] ADD [EmailVerificationOtpExpiry] DATETIME2 NULL;
-            END
+            ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""EmailVerificationOtpExpiry"" TIMESTAMP NULL;
         ");
         logger.LogInformation("User verification columns verified successfully.");
     } catch (Exception ex) {

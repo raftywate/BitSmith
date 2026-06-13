@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using dotnetBitSmith.Data;
 using dotnetBitSmith.Entities;
 using dotnetBitSmith.Entities.Enums;
@@ -91,8 +92,8 @@ namespace dotnetBitSmith.Helpers {
                         context.Problems.RemoveRange(context.Problems);
                         await context.SaveChangesAsync();
                         
-                        // Reseed database identity to 0
-                        await context.Database.ExecuteSqlRawAsync("DBCC CHECKIDENT ('Problems', RESEED, 0);");
+                        // Truncate tables and reset sequences cleanly using Postgres cascade
+                        await context.Database.ExecuteSqlRawAsync("TRUNCATE TABLE \"Comments\", \"Votes\", \"Submissions\", \"Solutions\", \"TestCases\", \"ProblemCategories\", \"Problems\" RESTART IDENTITY CASCADE;");
                         
                         await transaction.CommitAsync();
                     }
@@ -260,26 +261,24 @@ namespace dotnetBitSmith.Helpers {
                         });
                     }
 
-                    // Save problem using raw SQL to allow IDENTITY_INSERT
+                    // Save problem using raw SQL
                     using (var transaction = await context.Database.BeginTransactionAsync()) {
                         try {
-                             var pId = new Microsoft.Data.SqlClient.SqlParameter("@Id", problem.Id);
-                             var pProblemNumber = new Microsoft.Data.SqlClient.SqlParameter("@ProblemNumber", problem.ProblemNumber);
-                             var pTitle = new Microsoft.Data.SqlClient.SqlParameter("@Title", problem.Title ?? (object)DBNull.Value);
-                             var pDescription = new Microsoft.Data.SqlClient.SqlParameter("@Description", problem.Description ?? (object)DBNull.Value);
-                             var pStarterCode = new Microsoft.Data.SqlClient.SqlParameter("@StarterCode", problem.StarterCode ?? (object)DBNull.Value);
-                             var pHintsJson = new Microsoft.Data.SqlClient.SqlParameter("@HintsJson", problem.HintsJson ?? (object)DBNull.Value);
-                             var pDifficulty = new Microsoft.Data.SqlClient.SqlParameter("@Difficulty", problem.Difficulty.ToString());
-                             var pCreatedAt = new Microsoft.Data.SqlClient.SqlParameter("@CreatedAt", problem.CreatedAt);
-                             var pAuthorId = new Microsoft.Data.SqlClient.SqlParameter("@AuthorId", System.Data.SqlDbType.UniqueIdentifier) {
+                             var pId = new NpgsqlParameter("@Id", problem.Id);
+                             var pProblemNumber = new NpgsqlParameter("@ProblemNumber", problem.ProblemNumber);
+                             var pTitle = new NpgsqlParameter("@Title", problem.Title ?? (object)DBNull.Value);
+                             var pDescription = new NpgsqlParameter("@Description", problem.Description ?? (object)DBNull.Value);
+                             var pStarterCode = new NpgsqlParameter("@StarterCode", problem.StarterCode ?? (object)DBNull.Value);
+                             var pHintsJson = new NpgsqlParameter("@HintsJson", problem.HintsJson ?? (object)DBNull.Value);
+                             var pDifficulty = new NpgsqlParameter("@Difficulty", problem.Difficulty.ToString());
+                             var pCreatedAt = new NpgsqlParameter("@CreatedAt", problem.CreatedAt);
+                             var pAuthorId = new NpgsqlParameter("@AuthorId", NpgsqlTypes.NpgsqlDbType.Uuid) {
                                  Value = (object?)problem.AuthorId ?? DBNull.Value
                              };
 
                              var sql = @"
-                                 SET IDENTITY_INSERT Problems ON;
-                                 INSERT INTO Problems (Id, ProblemNumber, Title, Description, StarterCode, HintsJson, Difficulty, CreatedAt, AuthorId)
+                                 INSERT INTO ""Problems"" (""Id"", ""ProblemNumber"", ""Title"", ""Description"", ""StarterCode"", ""HintsJson"", ""Difficulty"", ""CreatedAt"", ""AuthorId"")
                                  VALUES (@Id, @ProblemNumber, @Title, @Description, @StarterCode, @HintsJson, @Difficulty, @CreatedAt, @AuthorId);
-                                 SET IDENTITY_INSERT Problems OFF;
                              ";
                              await context.Database.ExecuteSqlRawAsync(sql, new object[] {
                                  pId, pProblemNumber, pTitle, pDescription, pStarterCode, pHintsJson, pDifficulty, pCreatedAt, pAuthorId
@@ -314,6 +313,15 @@ namespace dotnetBitSmith.Helpers {
                     result.Errors++;
                     result.ErrorMessages.Add($"Problem #{problemJson.ProblemNumber} Error: {ex.Message}");
                 }
+            }
+
+            // Sync/Reset the auto-increment identity sequence for problems
+            try {
+                await context.Database.ExecuteSqlRawAsync(@"
+                    SELECT setval(pg_get_serial_sequence('""Problems""', 'ProblemNumber'), COALESCE(MAX(""ProblemNumber""), 0) + 1, false) FROM ""Problems"";
+                ");
+            } catch (Exception ex) {
+                logger.LogWarning(ex, "Failed to sync ProblemNumber sequence after import.");
             }
 
             logger.LogInformation("Import summary - Easy: {Easy}, Medium: {Medium}, Hard: {Hard}", easyImported, mediumImported, hardImported);

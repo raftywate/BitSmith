@@ -306,7 +306,7 @@ namespace dotnetBitSmith.Controllers {
         [HttpPost("make-all-test-cases-visible")]
         public async Task<IActionResult> MakeAllTestCasesVisible() {
             try {
-                int updatedCount = await _context.Database.ExecuteSqlRawAsync("UPDATE TestCases SET IsHidden = 0;");
+                int updatedCount = await _context.Database.ExecuteSqlRawAsync("UPDATE \"TestCases\" SET \"IsHidden\" = false;");
                 return Ok(new { message = $"Successfully updated {updatedCount} test cases to be visible.", count = updatedCount });
             } catch (Exception ex) {
                 return StatusCode(500, new { error = ex.Message });

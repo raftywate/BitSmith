@@ -7,7 +7,6 @@ namespace dotnetBitSmith.Entities {
         public Guid Id { get; set; } = Guid.NewGuid();
 
         [Required]
-        [Column(TypeName = "nvarchar(max)")]
         public string Content { get; set; }
 
         [Required]

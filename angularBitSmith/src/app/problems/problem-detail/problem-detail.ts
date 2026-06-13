@@ -315,6 +315,41 @@ export class ProblemDetailComponent implements OnDestroy {
 
   onEditorInit(editor: any) {
     this.editorInstance = editor;
+
+    const monaco = (window as any).monaco;
+    if (monaco) {
+      // 1. Register custom document formatting providers once
+      if (!(window as any).compylrFormattersRegistered) {
+        (window as any).compylrFormattersRegistered = true;
+
+        const languages = ['csharp', 'python', 'java', 'cpp', 'c'];
+        for (const lang of languages) {
+          monaco.languages.registerDocumentFormattingEditProvider(lang, {
+            provideDocumentFormattingEdits(model: any, options: any) {
+              const text = model.getValue();
+              const formatted = formatCodeSimple(text, lang, options.tabSize, options.insertSpaces);
+              return [
+                {
+                  range: model.getFullModelRange(),
+                  text: formatted,
+                },
+              ];
+            },
+          });
+        }
+      }
+
+      // 2. Bind keyboard shortcuts
+      // Ctrl + ' to RUN
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Quote, () => {
+        this.runSampleTests();
+      });
+
+      // Ctrl + Enter to SUBMIT
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+        this.submitCode();
+      });
+    }
   }
 
   formatCode() {
@@ -1841,4 +1876,65 @@ export class ProblemDetailComponent implements OnDestroy {
     if (!authorUsername || authorUsername === '[Deleted]') return false;
     return this.authService.isAdmin$() || this.canEdit(authorUsername);
   }
+}
+
+function formatCodeSimple(text: string, language: string, tabSize: number, insertSpaces: boolean): string {
+  const indentChar = insertSpaces ? ' '.repeat(tabSize) : '\t';
+  const lines = text.split(/\r?\n/);
+  let indentLevel = 0;
+  const formattedLines: string[] = [];
+  const isPython = language === 'python';
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (trimmed === '') {
+      formattedLines.push('');
+      continue;
+    }
+
+    if (isPython) {
+      const startsWithDedent = /^(elif|else|except|finally)\b/.test(trimmed);
+      if (startsWithDedent) {
+        indentLevel = Math.max(0, indentLevel - 1);
+      }
+
+      const indent = indentChar.repeat(indentLevel);
+      formattedLines.push(indent + trimmed);
+
+      if (startsWithDedent) {
+        indentLevel++;
+      }
+
+      if (trimmed.endsWith(':')) {
+        indentLevel++;
+      }
+    } else {
+      let openingCount = 0;
+      let closingCount = 0;
+
+      for (let j = 0; j < trimmed.length; j++) {
+        const char = trimmed[j];
+        if (char === '{') openingCount++;
+        else if (char === '}') closingCount++;
+      }
+
+      const startsWithClosing = trimmed.startsWith('}');
+      if (startsWithClosing) {
+        indentLevel = Math.max(0, indentLevel - 1);
+      }
+
+      const indent = indentChar.repeat(indentLevel);
+      formattedLines.push(indent + trimmed);
+
+      if (startsWithClosing) {
+        indentLevel = Math.max(0, indentLevel + (openingCount - (closingCount - 1)));
+      } else {
+        indentLevel = Math.max(0, indentLevel + (openingCount - closingCount));
+      }
+    }
+  }
+
+  return formattedLines.join('\n');
 }
