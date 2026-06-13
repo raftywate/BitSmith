@@ -247,6 +247,33 @@ using (var scope = app.Services.CreateScope()) {
         }
     }
 
+    // Automatic seeding if database has no problems
+    try {
+        if (!context.Problems.Any()) {
+            logger.LogInformation("No problems found in database. Running automatic seeding of LeetCode problems...");
+            var filePath = Path.Combine(Directory.GetCurrentDirectory(), "problems.json");
+            if (System.IO.File.Exists(filePath)) {
+                try {
+                    context.Database.ExecuteSqlRaw(@"
+                        ALTER TABLE ""Problems"" ADD COLUMN IF NOT EXISTS ""HintsJson"" TEXT NULL;
+                    ");
+                    context.Database.ExecuteSqlRaw(@"
+                        ALTER TABLE ""TestCases"" ADD COLUMN IF NOT EXISTS ""InputLabelsJson"" TEXT NULL;
+                    ");
+                } catch { }
+
+                var jsonContent = System.IO.File.ReadAllText(filePath);
+                var result = dotnetBitSmith.Helpers.ProblemSeeder.SeedProblemsFromJsonAsync(
+                    jsonContent, context, logger, null, false, 75, 100, 50).GetAwaiter().GetResult();
+                logger.LogInformation("Automatic seeding completed! Successfully imported: {Imported}, Errors: {Errors}", result.SuccessfullyImported, result.Errors);
+            } else {
+                logger.LogWarning("problems.json file not found at {Path}. Skipping automatic seeding.", filePath);
+            }
+        }
+    } catch (Exception ex) {
+        logger.LogError(ex, "Failed to run automatic database seeding on startup.");
+    }
+
     // Recommendation C: Ensure index existence on local database
     logger.LogInformation("Verifying and creating composite database indexes...");
     try {
