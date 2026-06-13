@@ -81,8 +81,27 @@ if (connectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCas
     }
 }
 
+// Validate that the host resolves to at least one IPv4 address to prevent Npgsql DivideByZeroException when IPv6 is disabled
+try {
+    var cb = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+    var host = cb.Host;
+    if (!string.IsNullOrEmpty(host) && !System.Net.IPAddress.TryParse(host, out _)) {
+        var addresses = System.Net.Dns.GetHostAddresses(host);
+        var ipv4Addresses = System.Linq.Enumerable.Where(addresses, ip => ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
+        if (!System.Linq.Enumerable.Any(ipv4Addresses)) {
+            throw new InvalidOperationException($"The database host '{host}' does not resolve to any IPv4 addresses. " +
+                "If you are using Supabase, please ensure you are using the connection pooler hostname (which supports IPv4) " +
+                "instead of the direct connection string, as Supabase direct hosts are IPv6-only. " +
+                "For Supabase, the pooled hostname ends with '.pooler.supabase.com'.");
+        }
+    }
+} catch (Exception ex) when (ex is not InvalidOperationException) {
+    // Ignore other DNS or connection string format errors here and let Npgsql handle them
+}
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString));
+
 
 
 builder.Services.AddRateLimiter(options => {
