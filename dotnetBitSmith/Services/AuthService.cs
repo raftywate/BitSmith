@@ -8,17 +8,20 @@ using dotnetBitSmith.Models.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
+using Microsoft.Extensions.Logging;
 
 namespace dotnetBitSmith.Services {
     public class AuthService : IAuthService {
         private readonly ApplicationDbContext _context;
         private readonly IConfiguration _configuration;
         private readonly IEmailService _emailService;
+        private readonly ILogger<AuthService> _logger;
 
-        public AuthService(ApplicationDbContext context, IConfiguration configuration, IEmailService emailService) {
+        public AuthService(ApplicationDbContext context, IConfiguration configuration, IEmailService emailService, ILogger<AuthService> logger) {
             _context = context;
             _configuration = configuration;
             _emailService = emailService;
+            _logger = logger;
         }
 
         public async Task<AuthResponseModel> RegisterAsync(UserRegisterModel model) {
@@ -75,7 +78,17 @@ namespace dotnetBitSmith.Services {
                        $"<h2 style='color: #00b8a3; letter-spacing: 2px;'>{otp}</h2>" +
                        $"<p>This code is valid for 15 minutes.</p>";
 
-            await _emailService.SendEmailAsync(user.Email, subject, body);
+            try {
+                await _emailService.SendEmailAsync(user.Email, subject, body);
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Failed to send registration verification email. Auto-verifying user '{Username}' as fallback.", user.Username);
+                user.IsEmailVerified = true;
+                user.EmailVerificationOtp = null;
+                user.EmailVerificationOtpExpiry = null;
+                await _context.SaveChangesAsync();
+
+                return GenerateJwtToken(user);
+            }
 
             return new AuthResponseModel {
                 RequiresVerification = true,
@@ -105,7 +118,19 @@ namespace dotnetBitSmith.Services {
                            $"<h2 style='color: #00b8a3; letter-spacing: 2px;'>{otp}</h2>" +
                            $"<p>This code is valid for 15 minutes.</p>";
 
-                await _emailService.SendEmailAsync(user.Email, subject, body);
+                try {
+                    await _emailService.SendEmailAsync(user.Email, subject, body);
+                } catch (Exception ex) {
+                    _logger.LogWarning(ex, "Failed to send login verification email. Auto-verifying user '{Username}' as fallback.", user.Username);
+                    user.IsEmailVerified = true;
+                    user.EmailVerificationOtp = null;
+                    user.EmailVerificationOtpExpiry = null;
+                    await _context.SaveChangesAsync();
+
+                    user.LastLoginAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+                    return GenerateJwtToken(user);
+                }
 
                 throw new UserVerificationRequiredException(user.Email, "Please verify your email address. A new OTP has been sent.");
             }

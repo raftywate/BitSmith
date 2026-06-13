@@ -51,7 +51,14 @@ namespace dotnetBitSmith.Services {
                     using (var client = new SmtpClient(smtpHost, smtpPort)) {
                         client.Credentials = new NetworkCredential(smtpUser, smtpPass);
                         client.EnableSsl = true;
-                        await client.SendMailAsync(message);
+                        
+                        var sendTask = client.SendMailAsync(message);
+                        var timeoutTask = Task.Delay(5000);
+                        var completedTask = await Task.WhenAny(sendTask, timeoutTask);
+                        if (completedTask == timeoutTask) {
+                            throw new TimeoutException("SMTP connection attempt timed out.");
+                        }
+                        await sendTask; // propagate any exceptions
                     }
                 }
                 _logger.LogInformation("Successfully sent email to {ToEmail}", toEmail);
