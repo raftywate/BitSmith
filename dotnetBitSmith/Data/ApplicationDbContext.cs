@@ -97,6 +97,15 @@ namespace dotnetBitSmith.Data {
             // We can add an index to quickly find all votes for a given entity (Solution or Comment)
             modelBuilder.Entity<Vote>()
                 .HasIndex(v => new { v.EntityId, v.EntityType });
+
+            // 6. Configure composite indexes for performance tuning
+            modelBuilder.Entity<Submission>()
+                .HasIndex(s => new { s.UserId, s.ProblemId, s.Status, s.CreatedAt })
+                .HasDatabaseName("IX_Submissions_UserId_ProblemId_Status_CreatedAt");
+
+            modelBuilder.Entity<ProblemOfTheDay>()
+                .HasIndex(p => p.Date)
+                .HasDatabaseName("IX_ProblemOfTheDays_Date");
         }
         
     }

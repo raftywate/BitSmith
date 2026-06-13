@@ -57,6 +57,10 @@ export class Login {
         if (err.status === 429) {
           this.errorMessage.set('Too many login attempts. Please wait a moment and try again.');
           this.toastService.warning('Login rate limit reached.');
+        } else if (err.status === 403 && err.error?.error?.startsWith('verification_required:')) {
+          const email = err.error.error.split(':')[1];
+          this.toastService.info('Please verify your email address. We sent a new code.');
+          void this.router.navigate(['/register'], { queryParams: { verifyEmail: email, redirect: this.redirectUrl } });
         } else {
           const message = getApiErrorMessage(err, 'Unable to sign in right now.');
           this.errorMessage.set(message);

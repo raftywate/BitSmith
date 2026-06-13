@@ -1,7 +1,8 @@
 export interface AuthResponse {
-    token : string;
-    userId : string;
-    username : string;
-    role : 'User' | 'Admin';
+    token?: string;
+    userId?: string;
+    username?: string;
+    role?: 'User' | 'Admin';
     profilePictureUrl?: string | null;
+    requiresVerification?: boolean;
 }

@@ -11,11 +11,17 @@ namespace dotnetBitSmith.Services {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<SubmissionService> _logger;
         private readonly ICompilationService _compilationService;
+        private readonly ISubmissionQueue _queue;
 
-        public SubmissionService(ApplicationDbContext context, ILogger<SubmissionService> logger, ICompilationService compilationService) {
+        public SubmissionService(
+            ApplicationDbContext context, 
+            ILogger<SubmissionService> logger, 
+            ICompilationService compilationService,
+            ISubmissionQueue queue) {
             _context = context;
             _logger = logger;
             _compilationService = compilationService;
+            _queue = queue;
         }
 
         public async Task<SubmissionResultModel> CreateSubmissionAsync(SubmissionCreateModel model, Guid userId) {
@@ -43,16 +49,9 @@ namespace dotnetBitSmith.Services {
             await _context.Submissions.AddAsync(newSubmission);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Submission {SubmissionId} created successfully.", newSubmission.Id);
+            _logger.LogInformation("Submission {SubmissionId} created successfully. Enqueueing for background processing.", newSubmission.Id);
             
-            try {
-                newSubmission = await _compilationService.JudgeSubmissionAsync(newSubmission);
-            } catch(Exception ex) {
-                _logger.LogError(ex, "Judge failed for Submission {SubmissionID}. Setting to InternalError.", newSubmission.Id);
-                newSubmission.Status = SubmissionStatus.InternalError;
-            }
-
-            _logger.LogInformation("Submission {SubmissionId} judged with status: {Status}", newSubmission.Id, newSubmission.Status);
+            await _queue.QueueSubmissionAsync(newSubmission.Id);
 
             return new SubmissionResultModel {
                 Id = newSubmission.Id,
@@ -130,10 +129,7 @@ namespace dotnetBitSmith.Services {
             var problemTitle = problem.Title;
             var problemDesc = problem.Description;
 
-            var tasks = testCases.Select(testCase => _compilationService.RunSampleAsync(normalizedLang, model.Code, testCase, problemTitle, problemDesc));
-            var results = await Task.WhenAll(tasks);
-
-            return results;
+            return await _compilationService.RunSamplesAsync(normalizedLang, model.Code, testCases, problemTitle, problemDesc);
         }
 
         public async Task<RunCodeResultModel> RunCustomCodeAsync(RunCodeRequestModel model, Guid userId) {
@@ -143,6 +139,35 @@ namespace dotnetBitSmith.Services {
             if (normalizedLang == "c#") normalizedLang = "csharp";
 
             return await _compilationService.ExecuteCustomCodeAsync(normalizedLang, model.Code, model.CustomStdin);
+        }
+
+        public async Task<SubmissionDetailModel?> GetSubmissionByIdAsync(Guid id, Guid userId) {
+            _logger.LogInformation("User {UserId} attempting to access submission {SubmissionId}", userId, id);
+            
+            var submission = await _context.Submissions
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == id && s.UserId == userId);
+
+            if (submission == null) {
+                return null;
+            }
+
+            return new SubmissionDetailModel {
+                Id = submission.Id,
+                ProblemId = submission.ProblemId,
+                Code = submission.Code,
+                Language = submission.Language,
+                Status = submission.Status,
+                ExecutionTimeMs = submission.ExecutionTimeMs,
+                ExecutionMemoryKb = submission.ExecutionMemoryKb,
+                ErrorMessage = submission.ErrorMessage,
+                CreatedAt = DateTime.SpecifyKind(submission.CreatedAt, DateTimeKind.Utc),
+                PassedCount = submission.PassedCount,
+                TotalCount = submission.TotalCount,
+                FailedTestCaseInput = submission.FailedTestCaseInput,
+                FailedTestCaseExpected = submission.FailedTestCaseExpected,
+                FailedTestCaseActual = submission.FailedTestCaseActual
+            };
         }
     }
 }

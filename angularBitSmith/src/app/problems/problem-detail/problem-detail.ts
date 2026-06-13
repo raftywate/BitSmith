@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, DestroyRef, HostListener, inject, signal, OnDestroy, effect } from '@angular/core';
+import { Component, computed, DestroyRef, HostListener, inject, signal, OnDestroy, effect, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
@@ -33,7 +33,8 @@ import { WorkspaceActionService } from '../../services/workspace-action';
 import { UserPreferencesUpdateRequest } from '../../models/user-profile';
 import { getApiErrorMessage } from '../../utils/api-error';
 import { MarkdownRenderPipe } from '../../pipes/markdown-render.pipe';
-import { finalize } from 'rxjs/operators';
+import { finalize, switchMap, takeWhile, catchError } from 'rxjs/operators';
+import { interval, of, combineLatest } from 'rxjs';
 
 type InfoPanelId = 'description' | 'solutions' | 'submissions';
 type WorkPanelId = 'editor' | 'result' | 'tests' | 'history';
@@ -232,16 +233,37 @@ export class ProblemDetailComponent implements OnDestroy {
 
   readonly latestSubmission = computed(() => this.lastSubmission() ?? this.submissions()[0] ?? null);
 
+  private lastLoadedUserId: string | null = null;
+  private lastLoadedProblemId: string | null = null;
+  private lastLoadedPodDate: string | null = null;
+
+  private getStorageKey(type: 'code' | 'customTestCases', problemId: string, lang?: string): string {
+    const user = this.authService.currentUser$();
+    const prefix = user ? user.id : 'anonymous';
+    if (type === 'code') {
+      return `compylr.code.${prefix}.${problemId}.${lang}`;
+    } else {
+      return `compylr.customTestCases.${prefix}.${problemId}`;
+    }
+  }
+
   constructor() {
-    this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
-      const id = params.get('id');
+    combineLatest([this.route.paramMap, this.route.queryParamMap])
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(([params, queryParams]) => {
+        const id = params.get('id');
+        const podDate = queryParams.get('podDate');
 
-      if (!id) {
-        return;
-      }
+        if (!id) {
+          return;
+        }
 
-      this.loadProblem(id);
-    });
+        if (id !== this.lastLoadedProblemId || podDate !== this.lastLoadedPodDate) {
+          this.lastLoadedProblemId = id;
+          this.lastLoadedPodDate = podDate;
+          this.loadProblem(id);
+        }
+      });
 
     this.loadUserPreferences();
 
@@ -254,6 +276,18 @@ export class ProblemDetailComponent implements OnDestroy {
     });
     effect(() => {
       this.workspaceActionService.isSubmitting.set(this.isSubmitting());
+    });
+
+    // Reload problem details, submissions, custom test cases, and editor code when the logged-in user changes.
+    effect(() => {
+      const user = this.authService.currentUser$();
+      const currentUserId = user ? user.id : 'anonymous';
+      const id = this.problemId();
+      if (id && currentUserId !== this.lastLoadedUserId) {
+        untracked(() => {
+          this.loadProblem(id);
+        });
+      }
     });
 
     // Listen to header events
@@ -523,19 +557,25 @@ export class ProblemDetailComponent implements OnDestroy {
     this.problem.set(null);
     this.problemError.set(null);
     this.isLoadingProblem.set(true);
+    this.isLoadingSolutions.set(false);
+    this.isLoadingSubmissions.set(false);
     this.solutions.set([]);
     this.submissions.set([]);
     this.lastSubmission.set(null);
+    this.selectedSubmission.set(null);
     this.sampleRunResults.set([]);
     this.selectedSampleIndex.set(0);
     this.rootCommentDrafts.set({});
     this.replyDrafts.set({});
     this.openReplyComposers.set({});
 
+    const currentUser = this.authService.currentUser$();
+    this.lastLoadedUserId = currentUser ? currentUser.id : 'anonymous';
+
     this.problemService.getProblemById(problemId).subscribe({
       next: problem => {
         if (typeof localStorage !== 'undefined') {
-          const storedCustom = localStorage.getItem(`compylr.customTestCases.${problemId}`);
+          const storedCustom = localStorage.getItem(this.getStorageKey('customTestCases', problemId));
           if (storedCustom) {
             try {
               const customCases: SampleTestCase[] = JSON.parse(storedCustom);
@@ -559,11 +599,23 @@ export class ProblemDetailComponent implements OnDestroy {
     });
   }
 
-  copyToClipboard(text: string) {
+  copyToClipboard(text: string, event?: MouseEvent) {
     if (!text) return;
+    const target = event?.currentTarget as HTMLElement;
+
+    const performCopy = () => {
+      this.toastService.success('Copied to clipboard!');
+      if (target) {
+        target.classList.add('copied');
+        setTimeout(() => {
+          target.classList.remove('copied');
+        }, 2000);
+      }
+    };
+
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(() => {
-        this.toastService.success('Copied to clipboard!');
+        performCopy();
       }).catch(err => {
         console.error('Failed to copy: ', err);
       });
@@ -574,7 +626,7 @@ export class ProblemDetailComponent implements OnDestroy {
       textArea.select();
       try {
         document.execCommand('copy');
-        this.toastService.success('Copied to clipboard!');
+        performCopy();
       } catch (err) {
         console.error('Fallback: Unable to copy', err);
       }
@@ -592,11 +644,11 @@ export class ProblemDetailComponent implements OnDestroy {
       if (zones[key].activeTab === 'submissions') shouldLoadSubmissions = true;
     }
 
-    if (shouldLoadSolutions && this.solutions().length === 0) {
-      this.loadSolutions();
+    if (shouldLoadSolutions) {
+      this.loadSolutions(true);
     }
-    if (shouldLoadSubmissions && this.submissions().length === 0) {
-      this.loadSubmissions();
+    if (shouldLoadSubmissions) {
+      this.loadSubmissions(true);
     }
   }
 
@@ -622,7 +674,7 @@ export class ProblemDetailComponent implements OnDestroy {
     }
 
     this.isRunningSamples.set(true);
-    this.openDockPanel('tests');
+    this.openDockPanel('result');
 
     this.submissionService
       .runSampleTests({
@@ -668,7 +720,7 @@ export class ProblemDetailComponent implements OnDestroy {
     };
 
     if (typeof localStorage !== 'undefined') {
-      const key = `compylr.customTestCases.${currentProblem.id}`;
+      const key = this.getStorageKey('customTestCases', currentProblem.id);
       const stored = localStorage.getItem(key);
       let customCases: SampleTestCase[] = [];
       if (stored) {
@@ -702,7 +754,7 @@ export class ProblemDetailComponent implements OnDestroy {
       const problemId = this.problem()?.id || this.problemId();
       const lang = this.editorLanguage();
       if (problemId && lang) {
-        localStorage.setItem(`compylr.code.${problemId}.${lang}`, value || '');
+        localStorage.setItem(this.getStorageKey('code', problemId, lang), value || '');
       }
     }
   }
@@ -733,19 +785,73 @@ export class ProblemDetailComponent implements OnDestroy {
       .subscribe({
         next: result => {
           this.lastSubmission.set(result);
-          if (result.status === 'Accepted') {
-            this.loadSubmissionsAndSelectFirst();
+          this.loadSubmissionsAndSelectFirst();
+          
+          if (result.status === 'Pending' || result.status === 'Running') {
+            this.pollSubmissionStatus(result.id);
           } else {
-            this.openDockPanel('result');
-            this.loadSubmissions(true);
+            this.isSubmitting.set(false);
+            this.toastService.success(`Submission finished with status: ${this.formatStatus(result.status)}.`);
           }
-          this.toastService.success(`Submission finished with status: ${this.formatStatus(result.status)}.`);
         },
         error: error => {
           this.toastService.error(getApiErrorMessage(error, 'Unable to submit code right now.'));
           this.isSubmitting.set(false);
+        }
+      });
+  }
+
+  private pollSubmissionStatus(submissionId: string) {
+    let attempts = 0;
+    const maxAttempts = 30;
+
+    interval(1000)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        switchMap(() => this.submissionService.getSubmission(submissionId)),
+        catchError(err => {
+          console.error('Error during polling:', err);
+          return of(null);
+        }),
+        takeWhile((sub): sub is SubmissionDetail => {
+          attempts++;
+          if (!sub) {
+            return false;
+          }
+          const isPendingOrRunning = sub.status === 'Pending' || sub.status === 'Running';
+          const withinTimeLimit = attempts < maxAttempts;
+          return isPendingOrRunning && withinTimeLimit;
+        }, true)
+      )
+      .subscribe({
+        next: sub => {
+          if (sub) {
+            this.lastSubmission.set(sub);
+            
+            const currentSelected = this.selectedSubmission();
+            if (currentSelected && currentSelected.id === sub.id) {
+              this.selectedSubmission.set(sub);
+            }
+
+            // Refresh submissions list to show updated status/details in submissions tab
+            this.loadSubmissions(true);
+            if (sub.status !== 'Pending' && sub.status !== 'Running') {
+              this.isSubmitting.set(false);
+              this.toastService.success(`Submission finished with status: ${this.formatStatus(sub.status)}.`);
+            }
+          }
         },
-        complete: () => this.isSubmitting.set(false)
+        error: () => {
+          this.isSubmitting.set(false);
+          this.toastService.error('Failed checking submission status.');
+        },
+        complete: () => {
+          this.isSubmitting.set(false);
+          const currentSub = this.lastSubmission();
+          if (currentSub && (currentSub.status === 'Pending' || currentSub.status === 'Running')) {
+            this.toastService.warning('Submission taking too long. Check back in your Submissions history tab.');
+          }
+        }
       });
   }
 
@@ -1302,7 +1408,7 @@ export class ProblemDetailComponent implements OnDestroy {
     const lang = this.editorLanguage();
 
     if (typeof localStorage !== 'undefined' && problemId && lang) {
-      const savedCode = localStorage.getItem(`compylr.code.${problemId}.${lang}`);
+      const savedCode = localStorage.getItem(this.getStorageKey('code', problemId, lang));
       if (savedCode !== null) {
         return savedCode;
       }

@@ -31,6 +31,7 @@
       </button>
     </div>
 
+    @if (problemSearch().trim()) {
     <div class="edit-problem-list">
       @for (problem of existingProblems(); track problem.id) {
       <button type="button" class="edit-problem-item" [class.edit-problem-item--active]="editingProblemId() === problem.id"
@@ -47,6 +48,7 @@
       <p class="field__hint">No problems found for this search.</p>
       }
     </div>
+    }
   </div>
   }
 
@@ -232,7 +234,7 @@
       <label class="field">
         <span class="field__label">Method Signature Metadata <span class="field__required">*</span></span>
         <span class="field__hint">Specify the JSON metadata so the system can generate the execution wrapper. Example: <code>&#123;"name":"solve","params":[&#123;"type":"integer[]"&#125;],"return":&#123;"type":"integer"&#125;&#125;</code></span>
-        <textarea class="input textarea textarea--mono textarea--code" formControlName="metaDataJson" rows="3" placeholder='&#123;&#10;  "name": "solve",&#10;  "params": [&#123;"type": "integer[]"&#125;],&#10;  "return": &#123;"type": "integer"&#125;&#10;&#125;'></textarea>
+        <textarea class="input textarea textarea--mono textarea--code" formControlName="metaDataJson" rows="12" placeholder='&#123;&#10;  "name": "solve",&#10;  "params": [&#123;"type": "integer[]"&#125;],&#10;  "return": &#123;"type": "integer"&#125;&#10;&#125;'></textarea>
       </label>
 
       <div class="field">
@@ -277,7 +279,7 @@
         <button type="submit" class="btn btn--primary" [disabled]="isSubmitting()">
           @if (isSubmitting()) {
             <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10" stroke-opacity=".25"/><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/></svg>
-            Creating Problem...
+            Saving Details...
           } @else {
             {{ isEditMode ? 'Update Problem & Continue →' : 'Create Problem & Continue →' }}
           }
@@ -315,6 +317,13 @@
     @if (uploadMode() === 'manual') {
     <form [formGroup]="testCasesForm" (ngSubmit)="onSubmitTestCases()" class="admin-form">
 
+      <!-- Shared Input Labels -->
+      <label class="field">
+        <span class="field__label">Input Labels</span>
+        <span class="field__hint">Define the labels for the inputs once. They will apply to all test cases. One label per line. Example: <code>nums</code>, <code>target</code>.</span>
+        <textarea class="input textarea textarea--small" formControlName="sharedInputLabels" rows="3" placeholder="nums&#10;target" style="max-width: 400px;"></textarea>
+      </label>
+
       <!-- Sample Test Cases -->
       <div class="testcase-section">
         <div class="testcase-section__header">
@@ -336,15 +345,10 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
               </button>
             </div>
-            <div class="testcase-card__fields">
+            <div class="testcase-card__fields" style="grid-template-columns: 1fr 1fr;">
               <label class="field">
                 <span class="field__label">Raw Input</span>
                 <textarea class="input textarea textarea--mono textarea--small" formControlName="input" rows="3" placeholder="[2,7,11,15]&#10;9"></textarea>
-              </label>
-              <label class="field">
-                <span class="field__label">Input Labels</span>
-                <span class="field__hint">One label per input line. Example: <code>nums</code>, <code>target</code>, <code>cost</code>.</span>
-                <textarea class="input textarea textarea--small" formControlName="inputLabelsText" rows="3" placeholder="nums&#10;target"></textarea>
               </label>
               <label class="field">
                 <span class="field__label">Expected Output</span>
@@ -380,15 +384,10 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
               </button>
             </div>
-            <div class="testcase-card__fields">
+            <div class="testcase-card__fields" style="grid-template-columns: 1fr 1fr;">
               <label class="field">
                 <span class="field__label">Raw Input</span>
                 <textarea class="input textarea textarea--mono textarea--small" formControlName="input" rows="3" placeholder="[3,2,4]&#10;6"></textarea>
-              </label>
-              <label class="field">
-                <span class="field__label">Input Labels</span>
-                <span class="field__hint">One label per input line. Hidden labels help admins keep cases readable.</span>
-                <textarea class="input textarea textarea--small" formControlName="inputLabelsText" rows="3" placeholder="nums&#10;target"></textarea>
               </label>
               <label class="field">
                 <span class="field__label">Expected Output</span>
@@ -465,7 +464,7 @@ false,"[3,2,4]\n6","[1,2]","nums|target"</code>
         <button type="button" class="btn btn--ghost" (click)="goBackToProblem()">← Previous</button>
         <div style="margin-left: auto; display: flex; gap: 1rem;">
           <button type="button" class="btn btn--ghost" (click)="skipTestCases()">Skip for now</button>
-          <button type="button" class="btn btn--primary" (click)="goToReview()" [disabled]="!selectedFile()">
+          <button type="button" class="btn btn--primary" (click)="goToReview()">
             Review & Submit →
           </button>
         </div>
@@ -483,20 +482,111 @@ false,"[3,2,4]\n6","[1,2]","nums|target"</code>
       <p>Please review the details below before saving test cases. The problem metadata is already saved.</p>
     </div>
 
-    <div class="review-details">
-      <h3>Problem Metadata</h3>
-      <ul>
-        <li><strong>Title:</strong> {{ problemForm.get('title')?.value }}</li>
-        <li><strong>Difficulty:</strong> {{ problemForm.get('difficulty')?.value }}</li>
-        <li><strong>Categories:</strong> {{ selectedCategories().length }} selected</li>
-      </ul>
+    <!-- Live Preview -->
+    <div class="problem-preview-live panel" style="border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; background: var(--surface-1); margin-top: 1rem;">
+      <div class="problem-header-merged">
+        <div class="problem-header-merged__top" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <span class="eyebrow eyebrow--small" style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted);">
+            {{ isEditMode ? 'Editing' : 'New' }} Problem Preview
+          </span>
+          <span class="difficulty-chip"
+                style="padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; border: 1.5px solid;"
+                [class.easy]="problemForm.get('difficulty')?.value === 'Easy'"
+                [class.medium]="problemForm.get('difficulty')?.value === 'Medium'"
+                [class.hard]="problemForm.get('difficulty')?.value === 'Hard'">
+            {{ problemForm.get('difficulty')?.value }}
+          </span>
+        </div>
 
-      <h3 style="margin-top: 1.5rem;">Test Cases Summary</h3>
-      @if (uploadMode() === 'file') {
-        <p>You have selected a file: <strong>{{ selectedFile()?.name }}</strong> to be uploaded.</p>
-      } @else {
-        <p>You have created <strong>{{ sampleCases.length }}</strong> sample test case(s) and <strong>{{ hiddenCases.length }}</strong> hidden test case(s) manually.</p>
+        <h1 class="problem-header-merged__title" style="margin: 0.5rem 0; font-size: 1.8rem; font-weight: 800; color: var(--text-strong);">
+          {{ problemForm.get('title')?.value || 'Untitled Problem' }}
+        </h1>
+
+        <!-- Topics -->
+        @if (selectedCategories().length) {
+        <div class="topics-pills" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0;">
+          @for (name of selectedCategoryNames; track name) {
+          <span class="pill" style="padding: 0.2rem 0.6rem; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border-color); font-size: 0.75rem; font-weight: 600; color: var(--text-muted);">{{ name }}</span>
+          }
+        </div>
+        }
+      </div>
+
+      <!-- Description -->
+      <div class="workspace-copy" style="margin: 1.5rem 0; line-height: 1.6; color: var(--text-strong);" [innerHTML]="(problemForm.get('description')?.value || '') | mdRender"></div>
+
+      <!-- Hints -->
+      @if (problemForm.get('hasHints')?.value && getCleanHints().length) {
+      <section class="hint-card panel" style="margin-top: 1.5rem; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; background: var(--surface-2);">
+        <div class="hint-card__header" style="font-weight: 700; margin-bottom: 0.75rem; font-size: 0.9rem; color: var(--text-strong);">
+          <span>Hints</span>
+        </div>
+        <div class="hints-accordion" style="display: grid; gap: 0.5rem;">
+          @for (hint of getCleanHints(); track $index) {
+          <details class="hint-details" style="border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface-1); overflow: hidden;">
+            <summary class="hint-summary" style="padding: 0.6rem 1rem; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: var(--text-strong);">
+              <span>Hint {{ $index + 1 }}</span>
+            </summary>
+            <div class="hint-content" style="padding: 0.75rem 1rem; border-top: 1px solid var(--border-color); color: var(--text-strong);" [innerHTML]="hint | mdRender"></div>
+          </details>
+          }
+        </div>
+      </section>
       }
+
+      <!-- Test cases -->
+      <div class="test-cases-preview" style="margin-top: 2rem;">
+        <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem; color: var(--text-strong);">Test Cases Preview</h3>
+        @if (uploadMode() === 'file') {
+          <p style="color: var(--text-muted);">Test cases will be uploaded from file: <strong>{{ selectedFile()?.name }}</strong></p>
+        } @else {
+          <!-- Let's show sample cases tabbed or listed -->
+          @if (sampleCases.length > 0) {
+            <div class="sample-runner" style="margin-top: 1rem;">
+              <div class="sample-runner__tabs" style="display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                @for (item of sampleCaseIndices; track item.control; let idx = $index) {
+                <button type="button" class="sample-runner__tab"
+                        style="padding: 0.4rem 1rem; border-radius: 6px; border: 1px solid transparent; background: transparent; color: var(--text-muted); font-weight: 700; cursor: pointer;"
+                        [style.background]="reviewTestCaseIndex() === idx ? 'var(--accent-soft)' : 'transparent'"
+                        [style.color]="reviewTestCaseIndex() === idx ? 'var(--accent)' : 'var(--text-muted)'"
+                        (click)="reviewTestCaseIndex.set(idx)">
+                  Case {{ idx + 1 }}
+                </button>
+                }
+              </div>
+
+              @if (sampleCaseIndices[reviewTestCaseIndex()]; as activeItem) {
+              <div class="sample-runner__grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <article style="background: var(--surface-2); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                  <div style="font-weight: 700; color: var(--text-strong); margin-bottom: 0.5rem;">Input</div>
+                  <div class="sample-runner__input-list" style="display: grid; gap: 0.5rem;">
+                    @for (part of getReviewTestCaseInputParts(activeItem.control); track $index) {
+                    <div class="sample-runner__input-item">
+                      <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">{{ part.label }}</span>
+                      <pre style="margin: 0.25rem 0 0; padding: 0.5rem; background: var(--surface-1); border-radius: 4px; font-family: var(--font-mono); font-size: 0.85rem; overflow: auto; border: 1px solid var(--border-color);">{{ part.value }}</pre>
+                    </div>
+                    }
+                  </div>
+                </article>
+                <article style="background: var(--surface-2); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                  <div style="font-weight: 700; color: var(--text-strong); margin-bottom: 0.5rem;">Expected Output</div>
+                  <pre style="margin: 0; padding: 0.5rem; background: var(--surface-1); border-radius: 4px; font-family: var(--font-mono); font-size: 0.85rem; overflow: auto; border: 1px solid var(--border-color);">{{ activeItem.control.get('expectedOutput')?.value }}</pre>
+                </article>
+              </div>
+              }
+            </div>
+          } @else {
+            <p style="color: var(--text-muted);">No manual sample test cases created.</p>
+          }
+
+          @if (hiddenCases.length > 0) {
+            <div style="margin-top: 1.5rem;">
+              <span style="font-weight: 700; font-size: 0.9rem; color: var(--text-strong);">Hidden Test Cases:</span>
+              <span style="margin-left: 0.5rem; background: var(--surface-2); border: 1px solid var(--border-color); border-radius: 999px; padding: 0.15rem 0.65rem; font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">{{ hiddenCases.length }} hidden case(s)</span>
+            </div>
+          }
+        }
+      </div>
     </div>
 
     <div class="admin-form__footer" style="margin-top: 2rem;">

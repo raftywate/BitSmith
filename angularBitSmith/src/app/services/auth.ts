@@ -53,6 +53,11 @@ export class AuthService extends AuthServiceContract {
   }
 
   private saveAuthData(response: AuthResponse) {
+    if (!response.token || !response.userId || !response.username || !response.role) {
+      console.error('Invalid auth response data:', response);
+      return;
+    }
+
     localStorage.setItem(this.tokenStorageKey, response.token);
 
     const userData: User = {
@@ -99,8 +104,22 @@ export class AuthService extends AuthServiceContract {
 
   register(credentials: any): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(`${this.apiUrl}/register`, credentials).pipe(
+      tap(response => {
+        if (!response.requiresVerification) {
+          this.saveAuthData(response);
+        }
+      })
+    );
+  }
+
+  verifyOtp(email: string, otp: string): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(`${this.apiUrl}/verify-otp`, { email, otp }).pipe(
       tap(response => this.saveAuthData(response))
     );
+  }
+
+  resendOtp(email: string): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/resend-otp`, { email });
   }
 
   logout(silent = false): void {

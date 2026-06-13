@@ -24,5 +24,17 @@ namespace dotnetBitSmith.Controllers {
             var authResponse = await _authService.LoginAsync(model);
             return Ok(authResponse);
         }
+
+        [HttpPost("verify-otp")]
+        public async Task<ActionResult> VerifyOtp([FromBody] VerifyOtpModel model) {
+            var authResponse = await _authService.VerifyOtpAsync(model);
+            return Ok(authResponse);
+        }
+
+        [HttpPost("resend-otp")]
+        public async Task<ActionResult> ResendOtp([FromBody] ResendOtpModel model) {
+            await _authService.ResendOtpAsync(model);
+            return Ok(new { message = "Verification code resent successfully." });
+        }
     }
 }

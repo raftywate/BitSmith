@@ -28,4 +28,8 @@ export class SubmissionService {
   runSampleTests(payload: SampleRunRequest): Observable<SampleRunResult[]> {
     return this.http.post<SampleRunResult[]>(`${this.apiUrl}/run-samples`, payload);
   }
+
+  getSubmission(id: string): Observable<SubmissionDetail> {
+    return this.http.get<SubmissionDetail>(`${this.apiUrl}/${id}`);
+  }
 }

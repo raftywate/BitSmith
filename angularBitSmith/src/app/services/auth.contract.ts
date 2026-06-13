@@ -15,6 +15,8 @@ export abstract class AuthServiceContract {
   //API methods
   abstract login(credentials: any): Observable<AuthResponse>;
   abstract register(credentials: any): Observable<AuthResponse>;
+  abstract verifyOtp(email: string, otp: string): Observable<AuthResponse>;
+  abstract resendOtp(email: string): Observable<any>;
   abstract logout(): void;
   abstract updateCurrentUserProfilePicture(url: string | null): void;
   abstract updateCurrentUserDetails(username: string, profilePictureUrl: string | null): void;

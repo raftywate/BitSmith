@@ -455,11 +455,13 @@
             </svg>
             All Submissions
           </button>
-          <button type="button" class="btn btn--subtle btn--small" style="display: inline-flex; align-items: center; gap: 6px; padding: 0.45rem 0.85rem; border-radius: 0.5rem; height: auto;" (click)="copyToClipboard(detail.code)" title="Copy Submitted Code">
-            <svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor" style="display: block;">
+          <button type="button" class="btn-copy" (click)="copyToClipboard(detail.code, $event)" title="Copy Submitted Code">
+            <svg class="icon-copy" xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" fill="currentColor">
               <path d="M360-240q-29.7 0-50.85-21.15Q288-282.3 288-312v-480q0-29.7 21.15-50.85Q330.3-864 360-864h360q29.7 0 50.85 21.15Q792-821.7 792-792v480q0-29.7-21.15-50.85Q749.7-240 720-240H360Zm0-72h360v-480H360v480ZM216-96q-29.7 0-50.85-21.15Q144-138.3 144-168v-528h72v528h432v72H216Zm144-288v-480 480Z"/>
             </svg>
-            Copy
+            <svg class="icon-check" xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" fill="currentColor">
+              <path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
+            </svg>
           </button>
         </div>
 
@@ -500,6 +502,81 @@
             <span style="font-size: 1.2rem; font-weight: 800; color: var(--text-strong);">{{ detail.executionMemoryKb ? (detail.executionMemoryKb / 1024 | number:'1.2-2') + ' MB' : '—' }}</span>
           </div>
         </div>
+
+        @if (detail.status === 'WrongAnswer' && detail.failedTestCaseInput) {
+        <div class="panel failed-testcase-card" style="padding: 1.15rem; display: grid; gap: 0.85rem; border: 1px solid var(--status-hard); background: color-mix(in srgb, var(--status-hard) 6%, var(--surface-2));">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+            <h4 style="margin: 0; color: var(--status-hard); font-weight: 700;">Failed Test Case</h4>
+            <button type="button" class="btn btn--primary btn--small" style="padding: 0.35rem 0.85rem; height: auto;" (click)="addFailedTestCaseToRunner(detail.failedTestCaseInput!, detail.failedTestCaseExpected!)">
+              Add to Test Cases
+            </button>
+          </div>
+          
+          <div class="sample-runner__grid" style="margin-top: 0.5rem;">
+            <article>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 13px; font-weight: 700; color: var(--text-muted);">Input</span>
+                <button type="button" class="btn-copy" (click)="copyToClipboard(detail.failedTestCaseInput!, $event)" title="Copy Input">
+                  <svg class="icon-copy" xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 -960 960 960" width="14px" fill="currentColor">
+                    <path d="M360-240q-29.7 0-50.85-21.15Q288-282.3 288-312v-480q0-29.7 21.15-50.85Q330.3-864 360-864h360q29.7 0 50.85 21.15Q792-821.7 792-792v480q0-29.7-21.15-50.85Q749.7-240 720-240H360Zm0-72h360v-480H360v480ZM216-96q-29.7 0-50.85-21.15Q144-138.3 144-168v-528h72v528h432v72H216Zm144-288v-480 480Z"/>
+                  </svg>
+                  <svg class="icon-check" xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 -960 960 960" width="14px" fill="currentColor">
+                    <path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
+                  </svg>
+                </button>
+              </div>
+              <pre style="margin: 0; padding: 0.65rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; font-family: var(--font-mono); font-size: 0.88rem;">{{ detail.failedTestCaseInput }}</pre>
+            </article>
+            <article>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 13px; font-weight: 700; color: var(--text-muted);">Expected Output</span>
+                <button type="button" class="btn-copy" (click)="copyToClipboard(detail.failedTestCaseExpected!, $event)" title="Copy Expected Output">
+                  <svg class="icon-copy" xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 -960 960 960" width="14px" fill="currentColor">
+                    <path d="M360-240q-29.7 0-50.85-21.15Q288-282.3 288-312v-480q0-29.7 21.15-50.85Q330.3-864 360-864h360q29.7 0 50.85 21.15Q792-821.7 792-792v480q0-29.7-21.15-50.85Q749.7-240 720-240H360Zm0-72h360v-480H360v480ZM216-96q-29.7 0-50.85-21.15Q144-138.3 144-168v-528h72v528h432v72H216Zm144-288v-480 480Z"/>
+                  </svg>
+                  <svg class="icon-check" xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 -960 960 960" width="14px" fill="currentColor">
+                    <path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
+                  </svg>
+                </button>
+              </div>
+              <pre style="margin: 0; padding: 0.65rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; font-family: var(--font-mono); font-size: 0.88rem;">{{ detail.failedTestCaseExpected }}</pre>
+            </article>
+            <article>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 13px; font-weight: 700; color: var(--text-muted);">Your Output</span>
+                @if (detail.failedTestCaseActual) {
+                <button type="button" class="btn-copy" (click)="copyToClipboard(detail.failedTestCaseActual, $event)" title="Copy Output">
+                  <svg class="icon-copy" xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 -960 960 960" width="14px" fill="currentColor">
+                    <path d="M360-240q-29.7 0-50.85-21.15Q288-282.3 288-312v-480q0-29.7 21.15-50.85Q330.3-864 360-864h360q29.7 0 50.85 21.15Q792-821.7 792-792v480q0-29.7-21.15-50.85Q749.7-240 720-240H360Zm0-72h360v-480H360v480ZM216-96q-29.7 0-50.85-21.15Q144-138.3 144-168v-528h72v528h432v72H216Zm144-288v-480 480Z"/>
+                  </svg>
+                  <svg class="icon-check" xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 -960 960 960" width="14px" fill="currentColor">
+                    <path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
+                  </svg>
+                </button>
+                }
+              </div>
+              <pre style="margin: 0; padding: 0.65rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; font-family: var(--font-mono); font-size: 0.88rem;">{{ detail.failedTestCaseActual || '—' }}</pre>
+            </article>
+          </div>
+        </div>
+        }
+
+        @if (detail.errorMessage) {
+        <div class="result-card__error-console panel">
+          <div class="error-console-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h4 style="margin: 0;">Execution Error Log</h4>
+            <button type="button" class="btn-copy" (click)="copyToClipboard(detail.errorMessage, $event)" title="Copy error log">
+              <svg class="icon-copy" xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" fill="currentColor">
+                <path d="M360-240q-29.7 0-50.85-21.15Q288-282.3 288-312v-480q0-29.7 21.15-50.85Q330.3-864 360-864h360q29.7 0 50.85 21.15Q792-821.7 792-792v480q0-29.7-21.15-50.85Q749.7-240 720-240H360Zm0-72h360v-480H360v480ZM216-96q-29.7 0-50.85-21.15Q144-138.3 144-168v-528h72v528h432v72H216Zm144-288v-480 480Z"/>
+              </svg>
+              <svg class="icon-check" xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" fill="currentColor">
+                <path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
+              </svg>
+            </button>
+          </div>
+          <pre class="error-log">{{ detail.errorMessage }}</pre>
+        </div>
+        }
 
         <div style="display: flex; flex-direction: column; gap: 0.65rem; flex: 1; min-height: 0;">
           <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
@@ -612,9 +689,6 @@
           <button type="button" class="sample-runner__tab" [class.sample-runner__tab--active]="selectedSampleIndex() === index"
             (click)="setSampleIndex(index)">
             Case {{ index + 1 }}
-            @if (sampleRunResults()[index]; as result) {
-            <span [class.sample-runner__dot--pass]="result.passed" [class.sample-runner__dot--fail]="!result.passed"></span>
-            }
           </button>
           }
         </div>
@@ -622,7 +696,17 @@
         @if (problemModel.sampleTestCases[selectedSampleIndex()]; as testCase) {
         <div class="sample-runner__grid">
           <article>
-            <span>Input</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-weight: 700; color: var(--text-strong);">Input</span>
+              <button type="button" class="btn-copy" (click)="copyToClipboard(testCase.input, $event)" title="Copy Input">
+                <svg class="icon-copy" xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" fill="currentColor">
+                  <path d="M360-240q-29.7 0-50.85-21.15Q288-282.3 288-312v-480q0-29.7 21.15-50.85Q330.3-864 360-864h360q29.7 0 50.85 21.15Q792-821.7 792-792v480q0-29.7-21.15-50.85Q749.7-240 720-240H360Zm0-72h360v-480H360v480ZM216-96q-29.7 0-50.85-21.15Q144-138.3 144-168v-528h72v528h432v72H216Zm144-288v-480 480Z"/>
+                </svg>
+                <svg class="icon-check" xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" fill="currentColor">
+                  <path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
+                </svg>
+              </button>
+            </div>
             <div class="sample-runner__input-list">
               @for (part of inputParts(testCase); track $index) {
               <div class="sample-runner__input-item">
@@ -631,30 +715,6 @@
               </div>
               }
             </div>
-          </article>
-          <article>
-            <span>Expected output</span>
-            <pre>{{ testCase.expectedOutput }}</pre>
-          </article>
-          <article>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <span>Your output</span>
-              @if (sampleRunResults()[selectedSampleIndex()]; as result) {
-                @if (result.error) {
-                  <button type="button" class="btn btn--subtle btn--icon" style="padding: 2px 6px; font-size: 11px; display: flex; align-items: center; gap: 4px; height: auto;" (click)="copyToClipboard(result.error)" title="Copy error">
-                    <svg xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 -960 960 960" width="14px" fill="currentColor">
-                      <path d="M360-240q-29.7 0-50.85-21.15Q288-282.3 288-312v-480q0-29.7 21.15-50.85Q330.3-864 360-864h360q29.7 0 50.85 21.15Q792-821.7 792-792v480q0-29.7-21.15-50.85Q749.7-240 720-240H360Zm0-72h360v-480H360v480ZM216-96q-29.7 0-50.85-21.15Q144-138.3 144-168v-528h72v528h432v72H216Zm144-288v-480 480Z"/>
-                    </svg>
-                    Copy
-                  </button>
-                }
-              }
-            </div>
-            @if (sampleRunResults()[selectedSampleIndex()]; as result) {
-            <pre>{{ result.actualOutput || result.error || result.status }}</pre>
-            } @else {
-            <pre>Run samples to see output.</pre>
-            }
           </article>
         </div>
         }
@@ -667,65 +727,92 @@
     <section class="tab-panel tab-panel--scroll">
       <div class="tab-panel__header">
         <div>
-          <p class="tab-panel__eyebrow">Judge</p>
-          <h2>Latest result</h2>
+          <p class="tab-panel__eyebrow">Runner</p>
+          <h2>Test Results</h2>
         </div>
       </div>
 
-      @if (latestSubmission(); as submission) {
-      <div class="result-card__summary" [attr.data-status]="submission.status" style="display: grid; gap: 0.65rem;">
-        <div class="result-card__badge" style="width: fit-content;">{{ formatStatus(submission.status) }}</div>
-        <h3 style="margin: 0;">{{ submissionSummary(submission) }}</h3>
-        @if ((submission.totalCount ?? 0) > 0) {
-          <p style="margin: 0; font-weight: 700; color: var(--text-strong); font-size: 0.95rem;">
-            Passed {{ submission.passedCount }} / {{ submission.totalCount }} test cases
-          </p>
+      @if (isRunningSamples()) {
+      <div class="workspace-page__skeleton-stack" style="padding: 1rem 0;">
+        <app-skeleton width="100%" height="4rem"></app-skeleton>
+        <app-skeleton width="100%" height="12rem"></app-skeleton>
+      </div>
+      } @else if (sampleRunResults().length > 0) {
+      <div class="sample-runner">
+        <div class="sample-runner__tabs">
+          @for (testCase of problemModel.sampleTestCases; track testCase.id; let index = $index) {
+          <button type="button" class="sample-runner__tab" [class.sample-runner__tab--active]="selectedSampleIndex() === index"
+            (click)="selectedSampleIndex.set(index)">
+            Case {{ index + 1 }}
+            @if (sampleRunResults()[index]; as result) {
+            <span [class.sample-runner__dot--pass]="result.passed" [class.sample-runner__dot--fail]="!result.passed"></span>
+            }
+          </button>
+          }
+        </div>
+
+        @if (problemModel.sampleTestCases[selectedSampleIndex()]; as testCase) {
+        <div class="sample-runner__grid">
+          <article>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-weight: 700; color: var(--text-strong);">Input</span>
+              <button type="button" class="btn-copy" (click)="copyToClipboard(testCase.input, $event)" title="Copy Input">
+                <svg class="icon-copy" xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" fill="currentColor">
+                  <path d="M360-240q-29.7 0-50.85-21.15Q288-282.3 288-312v-480q0-29.7 21.15-50.85Q330.3-864 360-864h360q29.7 0 50.85 21.15Q792-821.7 792-792v480q0-29.7-21.15-50.85Q749.7-240 720-240H360Zm0-72h360v-480H360v480ZM216-96q-29.7 0-50.85-21.15Q144-138.3 144-168v-528h72v528h432v72H216Zm144-288v-480 480Z"/>
+                </svg>
+                <svg class="icon-check" xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" fill="currentColor">
+                  <path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
+                </svg>
+              </button>
+            </div>
+            <div class="sample-runner__input-list">
+              @for (part of inputParts(testCase); track $index) {
+              <div class="sample-runner__input-item">
+                <span>{{ part.label }}</span>
+                <pre>{{ part.value }}</pre>
+              </div>
+              }
+            </div>
+          </article>
+          <article>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-weight: 700; color: var(--text-strong);">Expected output</span>
+              <button type="button" class="btn-copy" (click)="copyToClipboard(testCase.expectedOutput, $event)" title="Copy Expected Output">
+                <svg class="icon-copy" xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" fill="currentColor">
+                  <path d="M360-240q-29.7 0-50.85-21.15Q288-282.3 288-312v-480q0-29.7 21.15-50.85Q330.3-864 360-864h360q29.7 0 50.85 21.15Q792-821.7 792-792v480q0-29.7-21.15-50.85Q749.7-240 720-240H360Zm0-72h360v-480H360v480ZM216-96q-29.7 0-50.85-21.15Q144-138.3 144-168v-528h72v528h432v72H216Zm144-288v-480 480Z"/>
+                </svg>
+                <svg class="icon-check" xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" fill="currentColor">
+                  <path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
+                </svg>
+              </button>
+            </div>
+            <pre>{{ testCase.expectedOutput }}</pre>
+          </article>
+          <article>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-weight: 700; color: var(--text-strong);">Your output</span>
+              @if (sampleRunResults()[selectedSampleIndex()]; as result) {
+                <button type="button" class="btn-copy" (click)="copyToClipboard(result.actualOutput || result.error || result.status, $event)" title="Copy Output">
+                  <svg class="icon-copy" xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" fill="currentColor">
+                    <path d="M360-240q-29.7 0-50.85-21.15Q288-282.3 288-312v-480q0-29.7 21.15-50.85Q330.3-864 360-864h360q29.7 0 50.85 21.15Q792-821.7 792-792v480q0-29.7-21.15-50.85Q749.7-240 720-240H360Zm0-72h360v-480H360v480ZM216-96q-29.7 0-50.85-21.15Q144-138.3 144-168v-528h72v528h432v72H216Zm144-288v-480 480Z"/>
+                  </svg>
+                  <svg class="icon-check" xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" fill="currentColor">
+                    <path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
+                  </svg>
+                </button>
+              }
+            </div>
+            @if (sampleRunResults()[selectedSampleIndex()]; as result) {
+            <pre [style.color]="result.passed ? 'var(--status-easy)' : 'var(--status-hard)'">{{ result.actualOutput || result.error || result.status }}</pre>
+            } @else {
+            <pre>Run samples to see output.</pre>
+            }
+          </article>
+        </div>
         }
-        <p style="margin: 0; font-size: 0.88rem; color: var(--text-muted);">Created {{ submission.createdAt | date: 'medium' }}</p>
       </div>
-
-      @if (submission.status === 'WrongAnswer' && submission.failedTestCaseInput) {
-      <div class="panel failed-testcase-card" style="padding: 1.15rem; display: grid; gap: 0.85rem; border: 1px solid var(--status-hard); background: color-mix(in srgb, var(--status-hard) 6%, var(--surface-2));">
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
-          <h4 style="margin: 0; color: var(--status-hard); font-weight: 700;">Failed Test Case</h4>
-          <button type="button" class="btn btn--primary btn--small" style="padding: 0.35rem 0.85rem; height: auto;" (click)="addFailedTestCaseToRunner(submission.failedTestCaseInput!, submission.failedTestCaseExpected!)">
-            Add to Test Cases
-          </button>
-        </div>
-        
-        <div class="sample-runner__grid" style="margin-top: 0.5rem;">
-          <article>
-            <span style="font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 2px;">Input</span>
-            <pre style="margin: 0; padding: 0.65rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; font-family: var(--font-mono); font-size: 0.88rem;">{{ submission.failedTestCaseInput }}</pre>
-          </article>
-          <article>
-            <span style="font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 2px;">Expected Output</span>
-            <pre style="margin: 0; padding: 0.65rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; font-family: var(--font-mono); font-size: 0.88rem;">{{ submission.failedTestCaseExpected }}</pre>
-          </article>
-          <article>
-            <span style="font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 2px;">Your Output</span>
-            <pre style="margin: 0; padding: 0.65rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; font-family: var(--font-mono); font-size: 0.88rem;">{{ submission.failedTestCaseActual || '—' }}</pre>
-          </article>
-        </div>
-      </div>
-      }
-
-      @if (submission.errorMessage) {
-      <div class="result-card__error-console panel">
-        <div class="error-console-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <h4 style="margin: 0;">Execution Error Log</h4>
-          <button type="button" class="btn btn--subtle btn--icon" style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; height: auto;" (click)="copyToClipboard(submission.errorMessage)" title="Copy error log">
-            <svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor">
-              <path d="M360-240q-29.7 0-50.85-21.15Q288-282.3 288-312v-480q0-29.7 21.15-50.85Q330.3-864 360-864h360q29.7 0 50.85 21.15Q792-821.7 792-792v480q0-29.7-21.15-50.85Q749.7-240 720-240H360Zm0-72h360v-480H360v480ZM216-96q-29.7 0-50.85-21.15Q144-138.3 144-168v-528h72v528h432v72H216Zm144-288v-480 480Z"/>
-            </svg>
-            <span style="font-size: 13px;">Copy</span>
-          </button>
-        </div>
-        <pre class="error-log">{{ submission.errorMessage }}</pre>
-      </div>
-      }
       } @else {
-      <div class="empty-state">Submit your code to surface status, timing, and memory feedback here.</div>
+      <div class="empty-state">Run your code against sample test cases to see results here.</div>
       }
     </section>
     }

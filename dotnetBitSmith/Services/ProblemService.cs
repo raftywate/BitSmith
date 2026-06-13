@@ -6,16 +6,19 @@ using dotnetBitSmith.Models.Problems;
 using dotnetBitSmith.Entities.Enums;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace dotnetBitSmith.Services {
     public class ProblemService : IProblemService {
 
         private readonly ApplicationDbContext _context;
         private readonly ILogger<ProblemService> _logger;
+        private readonly IMemoryCache _cache;
 
-        public ProblemService(ApplicationDbContext context, ILogger<ProblemService> logger) {
+        public ProblemService(ApplicationDbContext context, ILogger<ProblemService> logger, IMemoryCache cache) {
             _context = context;
             _logger = logger;
+            _cache = cache;
         }
 
         public static string GenerateSlug(string title) {
@@ -151,45 +154,69 @@ namespace dotnetBitSmith.Services {
         public async Task<ProblemDetailModel> GetProblemByIdAsync(Guid problemId, Guid? userId = null) {
             _logger.LogInformation("Fetching problem details for Id {ProblemId}", problemId);
 
-            var problem = await _context.Problems
-               .AsNoTracking()
-               .AsSplitQuery()
-               .Include(p => p.Author)
-               .Include(p => p.ProblemCategories)
-                    .ThenInclude(pc => pc.Category)
-               .Include(p => p.TestCases)
-               .FirstOrDefaultAsync(p => p.Id == problemId)
-               ?? throw new NotFoundException("Problem with ID " + problemId + " not found.");
+            var cacheKey = $"problem_detail_{problemId}";
+            var detailModel = await _cache.GetOrCreateAsync(cacheKey, async entry => {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1);
+                _logger.LogInformation("Cache miss for {CacheKey}. Fetching from database.", cacheKey);
 
-            var testCases = problem.TestCases
-                .OrderBy(testCase => testCase.Id)
-                .Select(testCase => new TestCaseModel {
-                    Id = testCase.Id,
-                    Input = testCase.Input,
-                    ExpectedOutput = testCase.ExpectedOutput,
-                    InputLabels = DeserializeStringList(testCase.InputLabelsJson),
-                    IsHidden = testCase.IsHidden
-                })
-                .ToList();
+                var problem = await _context.Problems
+                   .AsNoTracking()
+                   .AsSplitQuery()
+                   .Include(p => p.Author)
+                   .Include(p => p.ProblemCategories)
+                        .ThenInclude(pc => pc.Category)
+                   .Include(p => p.TestCases)
+                   .FirstOrDefaultAsync(p => p.Id == problemId)
+                   ?? throw new NotFoundException("Problem with ID " + problemId + " not found.");
 
-            var detailModel = new ProblemDetailModel {
-                Id = problem.Id,
-                ProblemNumber = problem.ProblemNumber,
-                Title = problem.Title,
-                Slug = GenerateSlug(problem.Title),
-                Description = problem.Description,
-                Difficulty = problem.Difficulty,
-                StarterCode = problem.StarterCode,
-                MetaDataJson = problem.MetaDataJson,
-                Hints = DeserializeStringList(problem.HintsJson),
-                AuthorName = problem.Author != null ? (problem.Author.DisplayName ?? problem.Author.Username) : "Unknown",
-                Categories = problem.ProblemCategories.Select(pc => new CategoryModel {
-                    Id = pc.Category != null ? pc.Category.Id : Guid.Empty,
-                    Name = pc.Category != null ? pc.Category.Name : "Unknown",
-                    Slug = pc.Category != null ? pc.Category.Slug : "unknown"
-                }).ToList(),
-                SampleTestCases = testCases.Where(testCase => !testCase.IsHidden).ToList(),
-                TestCases = testCases
+                var testCases = problem.TestCases
+                    .OrderBy(testCase => testCase.Id)
+                    .Select(testCase => new TestCaseModel {
+                        Id = testCase.Id,
+                        Input = testCase.Input,
+                        ExpectedOutput = testCase.ExpectedOutput,
+                        InputLabels = DeserializeStringList(testCase.InputLabelsJson),
+                        IsHidden = testCase.IsHidden
+                    })
+                    .ToList();
+
+                return new ProblemDetailModel {
+                    Id = problem.Id,
+                    ProblemNumber = problem.ProblemNumber,
+                    Title = problem.Title,
+                    Slug = GenerateSlug(problem.Title),
+                    Description = problem.Description,
+                    Difficulty = problem.Difficulty,
+                    StarterCode = problem.StarterCode,
+                    MetaDataJson = problem.MetaDataJson,
+                    Hints = DeserializeStringList(problem.HintsJson),
+                    AuthorName = problem.Author != null ? (problem.Author.DisplayName ?? problem.Author.Username) : "Unknown",
+                    Categories = problem.ProblemCategories.Select(pc => new CategoryModel {
+                        Id = pc.Category != null ? pc.Category.Id : Guid.Empty,
+                        Name = pc.Category != null ? pc.Category.Name : "Unknown",
+                        Slug = pc.Category != null ? pc.Category.Slug : "unknown"
+                    }).ToList(),
+                    SampleTestCases = testCases.Where(testCase => !testCase.IsHidden).ToList(),
+                    TestCases = testCases
+                };
+            });
+
+            // Clone to avoid modifying the cached reference directly since we enrich it with user status
+            var responseModel = new ProblemDetailModel {
+                Id = detailModel!.Id,
+                ProblemNumber = detailModel.ProblemNumber,
+                Title = detailModel.Title,
+                Slug = detailModel.Slug,
+                Description = detailModel.Description,
+                Difficulty = detailModel.Difficulty,
+                StarterCode = detailModel.StarterCode,
+                MetaDataJson = detailModel.MetaDataJson,
+                Hints = detailModel.Hints,
+                AuthorName = detailModel.AuthorName,
+                Categories = detailModel.Categories,
+                SampleTestCases = detailModel.SampleTestCases,
+                TestCases = detailModel.TestCases,
+                Status = "Unattempted"
             };
 
             if (userId.HasValue) {
@@ -198,15 +225,13 @@ namespace dotnetBitSmith.Services {
                     .Select(s => s.Status)
                     .ToListAsync();
                 if (userSubs.Any(s => s == SubmissionStatus.Accepted)) {
-                    detailModel.Status = "Solved";
+                    responseModel.Status = "Solved";
                 } else if (userSubs.Any()) {
-                    detailModel.Status = "Attempted";
-                } else {
-                    detailModel.Status = "Unattempted";
+                    responseModel.Status = "Attempted";
                 }
             }
 
-            return detailModel;
+            return responseModel;
         }
 
         public async Task<ProblemDetailModel> CreateProblemAsync(ProblemCreateModel model, Guid authorId) {
@@ -309,6 +334,8 @@ namespace dotnetBitSmith.Services {
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
+                _cache.Remove($"problem_detail_{problemId}");
+
                 return await GetProblemByIdAsync(problemId);
             } catch {
                 await transaction.RollbackAsync();
@@ -317,15 +344,19 @@ namespace dotnetBitSmith.Services {
         }
 
         public async Task<IEnumerable<CategoryModel>> GetAllCategoriesAsync() {
-            return await _context.Categories
-                .AsNoTracking()
-                .OrderBy(c => c.Name)
-                .Select(c => new CategoryModel {
-                    Id = c.Id,
-                    Name = c.Name,
-                    Slug = c.Slug
-                })
-                .ToListAsync();
+            return (await _cache.GetOrCreateAsync("categories_all", async entry => {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1);
+                _logger.LogInformation("Cache miss for categories_all. Fetching from database.");
+                return await _context.Categories
+                    .AsNoTracking()
+                    .OrderBy(c => c.Name)
+                    .Select(c => new CategoryModel {
+                        Id = c.Id,
+                        Name = c.Name,
+                        Slug = c.Slug
+                    })
+                    .ToListAsync();
+            })) ?? System.Linq.Enumerable.Empty<CategoryModel>();
         }
 
         public async Task<ProblemDetailModel> AddTestCasesAsync(Guid problemId, List<TestCaseCreateModel> testCases) {
@@ -344,6 +375,7 @@ namespace dotnetBitSmith.Services {
             }
 
             await _context.SaveChangesAsync();
+            _cache.Remove($"problem_detail_{problemId}");
             return await GetProblemByIdAsync(problemId);
         }
 
@@ -367,50 +399,60 @@ namespace dotnetBitSmith.Services {
             }
 
             await _context.SaveChangesAsync();
+            _cache.Remove($"problem_detail_{problemId}");
             return await GetProblemByIdAsync(problemId);
         }
 
         public async Task<ProblemSummaryModel> GetProblemOfTheDayAsync(DateOnly date) {
-            var pod = await _context.ProblemOfTheDays
-                .FirstOrDefaultAsync(x => x.Date == date);
+            var cacheKey = $"pod_{date:yyyyMMdd}";
+            return (await _cache.GetOrCreateAsync(cacheKey, async entry => {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(4);
+                _logger.LogInformation("Cache miss for POD on {Date}", date);
 
-            if (pod == null) {
-                // Pick a random problem
-                var count = await _context.Problems.CountAsync();
-                if (count == 0) throw new NotFoundException("No problems available to set as Problem of the Day.");
-                
-                var random = new Random();
-                var skip = random.Next(0, count);
-                var randomProblem = await _context.Problems.Skip(skip).FirstOrDefaultAsync();
-                
-                pod = new ProblemOfTheDay {
-                    Id = Guid.NewGuid(),
-                    Date = date,
-                    ProblemId = randomProblem!.Id
+                var pod = await _context.ProblemOfTheDays
+                    .FirstOrDefaultAsync(x => x.Date == date);
+
+                if (pod == null) {
+                    // Pick a random problem
+                    var count = await _context.Problems.CountAsync();
+                    if (count == 0) throw new NotFoundException("No problems available to set as Problem of the Day.");
+                    
+                    var random = new Random(date.DayNumber);
+                    var skip = random.Next(0, count);
+                    var randomProblem = await _context.Problems
+                        .OrderBy(p => p.ProblemNumber)
+                        .Skip(skip)
+                        .FirstOrDefaultAsync();
+                    
+                    pod = new ProblemOfTheDay {
+                        Id = Guid.NewGuid(),
+                        Date = date,
+                        ProblemId = randomProblem!.Id
+                    };
+                    _context.ProblemOfTheDays.Add(pod);
+                    await _context.SaveChangesAsync();
+                }
+
+                var problem = await _context.Problems
+                    .AsNoTracking()
+                    .Include(p => p.ProblemCategories)
+                        .ThenInclude(pc => pc.Category)
+                    .FirstOrDefaultAsync(p => p.Id == pod.ProblemId)
+                    ?? throw new NotFoundException("Problem associated with POD not found.");
+
+                return new ProblemSummaryModel {
+                    Id = problem.Id,
+                    Title = problem.Title,
+                    Slug = GenerateSlug(problem.Title),
+                    ProblemNumber = problem.ProblemNumber,
+                    Difficulty = problem.Difficulty,
+                    Categories = problem.ProblemCategories.Select(pc => new CategoryModel {
+                        Id = pc.Category != null ? pc.Category.Id : Guid.Empty,
+                        Name = pc.Category != null ? pc.Category.Name : "Unknown",
+                        Slug = pc.Category != null ? pc.Category.Slug : "unknown"
+                    }).ToList()
                 };
-                _context.ProblemOfTheDays.Add(pod);
-                await _context.SaveChangesAsync();
-            }
-
-            var problem = await _context.Problems
-                .AsNoTracking()
-                .Include(p => p.ProblemCategories)
-                    .ThenInclude(pc => pc.Category)
-                .FirstOrDefaultAsync(p => p.Id == pod.ProblemId)
-                ?? throw new NotFoundException("Problem associated with POD not found.");
-
-            return new ProblemSummaryModel {
-                Id = problem.Id,
-                Title = problem.Title,
-                Slug = GenerateSlug(problem.Title),
-                ProblemNumber = problem.ProblemNumber,
-                Difficulty = problem.Difficulty,
-                Categories = problem.ProblemCategories.Select(pc => new CategoryModel {
-                    Id = pc.Category != null ? pc.Category.Id : Guid.Empty,
-                    Name = pc.Category != null ? pc.Category.Name : "Unknown",
-                    Slug = pc.Category != null ? pc.Category.Slug : "unknown"
-                }).ToList()
-            };
+            }))!;
         }
 
         public async Task<ProblemSummaryModel> SetProblemOfTheDayAsync(DateOnly date, Guid problemId) {
@@ -429,6 +471,9 @@ namespace dotnetBitSmith.Services {
                 _context.ProblemOfTheDays.Add(pod);
             }
             await _context.SaveChangesAsync();
+
+            _cache.Remove($"pod_{date:yyyyMMdd}");
+
             return await GetProblemOfTheDayAsync(date);
         }
 

@@ -1,4 +1,4 @@
-<div class="container" style="max-width: 800px; margin: 2rem auto; min-height: calc(100vh - 120px);">
+<div class="container" style="max-width: 1200px; margin: 2rem auto; min-height: calc(100vh - 120px);">
   <div class="panel" style="padding: 2.5rem;">
     <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
       <a routerLink="/admin" class="btn btn--ghost btn--small" style="padding: 0.5rem;">
@@ -15,10 +15,10 @@
       </div>
     }
 
-    <form [formGroup]="podForm" (ngSubmit)="onSubmit()">
+    <div [formGroup]="podForm">
       <div class="form-group">
         <label for="dateStr" class="label">Date</label>
-        <input type="date" id="dateStr" formControlName="dateStr" class="input" />
+        <input type="date" id="dateStr" formControlName="dateStr" class="input" [min]="todayStr()" />
       </div>
 
       <div class="form-group" style="margin-top: 1rem;">
@@ -26,30 +26,88 @@
         <input type="text" id="problemSearch" [ngModel]="searchQuery()" (ngModelChange)="onSearchInput($event)" [ngModelOptions]="{standalone: true}" class="input" placeholder="Type to search..." />
       </div>
 
+      <div class="form-group" style="margin-top: 1rem;">
+        <label class="label" style="font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 0.5rem;">Filter by Topics</label>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+          @for (cat of categories(); track cat.id) {
+            <button type="button" 
+                    [style.border-color]="selectedCategoryIds().includes(cat.id) ? 'var(--accent)' : 'var(--border-color)'"
+                    [style.background]="selectedCategoryIds().includes(cat.id) ? 'var(--accent-soft)' : 'var(--surface-2)'"
+                    [style.color]="selectedCategoryIds().includes(cat.id) ? 'var(--accent)' : 'var(--text-muted)'"
+                    (click)="toggleCategory(cat.id)"
+                    style="padding: 0.35rem 0.85rem; border-radius: 999px; border: 1.5px solid; font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: all 150ms; font-family: inherit;">
+              {{ cat.name }}
+            </button>
+          }
+        </div>
+      </div>
+
       @if (isLoading()) {
-        <p style="color: var(--text-muted); font-size: 0.9rem;">Loading problems...</p>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 1rem;">Loading problems...</p>
       }
 
-      <div style="max-height: 500px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; margin-top: 0.5rem;">
+      <div style="border: 1px solid var(--border-color); border-radius: 8px; margin-top: 1rem; overflow: hidden; background: var(--surface-1);">
         @for (problem of problems(); track problem.id) {
-          <div style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;"
-               [style.background]="selectedProblemId() === problem.id ? 'var(--surface-3)' : 'transparent'">
+          <div style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;"
+               [style.background]="selectedProblemId() === problem.id ? 'var(--accent-soft)' : 'transparent'"
+               [style.border-left]="selectedProblemId() === problem.id ? '3px solid var(--accent)' : '3px solid transparent'">
             <div>
-              <strong style="display: block;">{{ problem.problemNumber }}. {{ problem.title }}</strong>
-              <span style="font-size: 0.8rem; color: var(--text-muted);">{{ problem.difficulty }}</span>
+              <strong style="display: block; color: var(--text-strong);">#{{ problem.problemNumber }} · {{ problem.title }}</strong>
+              <span style="font-size: 0.8rem; font-weight: 700;"
+                    [class.difficulty-text--easy]="problem.difficulty === 'Easy'"
+                    [class.difficulty-text--medium]="problem.difficulty === 'Medium'"
+                    [class.difficulty-text--hard]="problem.difficulty === 'Hard'">
+                {{ problem.difficulty }}
+              </span>
             </div>
-            <button type="button" class="btn btn--small" [class.btn--primary]="selectedProblemId() !== problem.id" [class.btn--ghost]="selectedProblemId() === problem.id" (click)="selectProblem(problem.id)">
-              {{ selectedProblemId() === problem.id ? 'Selected' : 'Select' }}
+            <button type="button" 
+                    class="btn btn--small" 
+                    [class.btn--primary]="selectedProblemId() !== problem.id" 
+                    [class.btn--ghost]="selectedProblemId() === problem.id" 
+                    [disabled]="isSubmitting() || podForm.invalid"
+                    (click)="selectProblemAndSet(problem)">
+              {{ selectedProblemId() === problem.id ? 'Active PoD' : 'Set as PoD' }}
             </button>
+          </div>
+        }
+        @if (!problems().length && !isLoading()) {
+          <div style="padding: 2rem; text-align: center; color: var(--text-muted);">
+            No problems match your search or filters.
           </div>
         }
       </div>
 
-      <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
-        <button type="submit" class="btn btn--primary" [disabled]="!podForm.valid || !selectedProblemId() || isSubmitting()">
-          {{ isSubmitting() ? 'Saving...' : 'Set Problem of the Day' }}
-        </button>
+      <!-- Pagination Footer -->
+      @if (problems().length || isLoading()) {
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; gap: 1rem; flex-wrap: wrap;">
+        <p style="margin: 0; font-size: 0.9rem; color: var(--text-muted); font-weight: 600;">
+          Showing {{ resultRange() }} of {{ totalCount() }} problems
+        </p>
+
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <button type="button" class="btn btn--ghost btn--small" (click)="onPrevPage()" [disabled]="!hasPrevPage()">
+            Previous
+          </button>
+
+          <div style="display: flex; gap: 0.25rem;">
+            @for (page of visiblePages(); track page) {
+              <button type="button" 
+                      (click)="goToPage(page)"
+                      [style.background]="page === currentPage() ? 'var(--accent)' : 'var(--surface-2)'"
+                      [style.color]="page === currentPage() ? '#fff' : 'var(--text-strong)'"
+                      [style.border-color]="page === currentPage() ? 'var(--accent)' : 'var(--border-color)'"
+                      style="min-width: 2.2rem; height: 2.2rem; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 700; border-radius: 6px; border: 1.5px solid; cursor: pointer; transition: all 150ms; font-family: inherit;">
+                {{ page }}
+              </button>
+            }
+          </div>
+
+          <button type="button" class="btn btn--ghost btn--small" (click)="onNextPage()" [disabled]="!hasNextPage()">
+            Next
+          </button>
+        </div>
       </div>
-    </form>
+      }
+    </div>
   </div>
 </div>

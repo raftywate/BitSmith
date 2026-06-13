@@ -166,6 +166,69 @@ namespace dotnetBitSmith.Services {
             };
         }
 
+        public async Task<IEnumerable<SampleRunResultModel>> RunSamplesAsync(string language, string code, List<TestCase> testCases, string problemTitle, string problemDescription) {
+            var wrappedCode = code;
+            bool allowAnyOrder = false;
+
+            try {
+                if (!string.IsNullOrEmpty(problemTitle)) {
+                    allowAnyOrder = problemDescription?.Contains("any order", StringComparison.OrdinalIgnoreCase) ?? false;
+                    var metadata = await GetProblemMetadataAsync(problemTitle);
+                    if (metadata != null) {
+                        wrappedCode = WrapCode(language, code, metadata.Value.MethodName, metadata.Value.ParamTypes, metadata.Value.ReturnType);
+                    } else {
+                        wrappedCode = InjectLibraries(language, code);
+                    }
+                } else {
+                    wrappedCode = InjectLibraries(language, code);
+                }
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Failed to wrap code for samples run.");
+            }
+
+            var combinedInput = string.Join("\n", testCases.Select(tc => tc.Input.TrimEnd('\r', '\n')));
+            var result = await ExecuteInSandboxAsync(language, wrappedCode, combinedInput);
+
+            var actualOutputs = (result.Stdout ?? string.Empty)
+                .Split(new[] { "\r\n", "\n" }, StringSplitOptions.None)
+                .Select(line => line.Trim())
+                .Where(line => !string.IsNullOrEmpty(line))
+                .ToList();
+
+            var runResults = new List<SampleRunResultModel>();
+            for (int i = 0; i < testCases.Count; i++) {
+                var tc = testCases[i];
+                var expectedOutput = NormalizeOutput(tc.ExpectedOutput, allowAnyOrder);
+                string actualOutput = "";
+                bool isPassed = false;
+                string status = result.Status;
+
+                if (result.Status == "Success") {
+                    if (i < actualOutputs.Count) {
+                        actualOutput = NormalizeOutput(actualOutputs[i], allowAnyOrder);
+                        isPassed = string.Equals(actualOutput, expectedOutput, StringComparison.Ordinal);
+                        status = isPassed ? "Accepted" : "Wrong Answer";
+                    } else {
+                        status = "Wrong Answer";
+                    }
+                }
+
+                runResults.Add(new SampleRunResultModel {
+                    TestCaseId = tc.Id,
+                    Input = tc.Input,
+                    ExpectedOutput = tc.ExpectedOutput,
+                    ActualOutput = actualOutput,
+                    Status = status,
+                    Error = result.Error,
+                    ExecutionTimeMs = result.ExecutionTimeMs,
+                    ExecutionMemoryKb = null,
+                    Passed = isPassed
+                });
+            }
+
+            return runResults;
+        }
+
         public async Task<RunCodeResultModel> ExecuteCustomCodeAsync(string language, string code, string stdin) {
             var wrappedCode = InjectLibraries(language, code);
             var result = await ExecuteInSandboxAsync(language, wrappedCode, stdin);
@@ -175,6 +238,15 @@ namespace dotnetBitSmith.Services {
                 Status = result.Status,
                 ExecutionTimeMs = result.ExecutionTimeMs
             };
+        }
+
+        private async Task<bool> IsWarmContainerRunningAsync(string containerName) {
+            try {
+                var result = await RunProcessAsync("docker", "inspect -f \"{{.State.Running}}\" " + containerName, 2000);
+                return result.ExitCode == 0 && result.Stdout.Trim().Equals("true", StringComparison.OrdinalIgnoreCase);
+            } catch {
+                return false;
+            }
         }
 
         public async Task<SandboxResult> ExecuteInSandboxAsync(string language, string wrappedCode, string stdin) {
@@ -200,28 +272,28 @@ namespace dotnetBitSmith.Services {
                         imageName = "python:3.10-slim";
                         sourceFile = "solution.py";
                         await File.WriteAllTextAsync(Path.Combine(tempPath, sourceFile), wrappedCode);
-                        shellCmd = "timeout 5 python solution.py < input.txt";
+                        shellCmd = "timeout 5 python -B solution.py < input.txt";
                         break;
 
                     case "cpp":
                         imageName = "gcc:13";
                         sourceFile = "solution.cpp";
                         await File.WriteAllTextAsync(Path.Combine(tempPath, sourceFile), wrappedCode);
-                        shellCmd = "cp solution.cpp /tmp/ && g++ -w -O3 -std=c++23 /tmp/solution.cpp -o /tmp/solution 2> compile_err.txt && timeout 5 /tmp/solution < input.txt";
+                        shellCmd = $"g++ -w -std=c++23 solution.cpp -o /tmp/{executionId} 2> /tmp/{executionId}.err && timeout 5 /tmp/{executionId} < input.txt ; RET=$? ; [ -f /tmp/{executionId}.err ] && cat /tmp/{executionId}.err > compile_err.txt ; rm -f /tmp/{executionId} /tmp/{executionId}.err ; exit $RET";
                         break;
 
                     case "c":
                         imageName = "gcc:13";
                         sourceFile = "solution.c";
                         await File.WriteAllTextAsync(Path.Combine(tempPath, sourceFile), wrappedCode);
-                        shellCmd = "cp solution.c /tmp/ && gcc -w -O3 /tmp/solution.c -o /tmp/solution -lm 2> compile_err.txt && timeout 5 /tmp/solution < input.txt";
+                        shellCmd = $"gcc -w solution.c -o /tmp/{executionId} -lm 2> /tmp/{executionId}.err && timeout 5 /tmp/{executionId} < input.txt ; RET=$? ; [ -f /tmp/{executionId}.err ] && cat /tmp/{executionId}.err > compile_err.txt ; rm -f /tmp/{executionId} /tmp/{executionId}.err ; exit $RET";
                         break;
 
                     case "java":
                         imageName = "eclipse-temurin:21-alpine";
                         sourceFile = "SolutionRunner.java";
                         await File.WriteAllTextAsync(Path.Combine(tempPath, sourceFile), wrappedCode);
-                        shellCmd = "cp SolutionRunner.java /tmp/ && javac -nowarn -d /tmp /tmp/SolutionRunner.java 2> compile_err.txt && timeout 5 java -cp /tmp SolutionRunner < input.txt";
+                        shellCmd = $"mkdir -p /tmp/{executionId} && javac -nowarn -d /tmp/{executionId} SolutionRunner.java 2> /tmp/{executionId}.err && timeout 5 java -cp /tmp/{executionId} SolutionRunner < input.txt ; RET=$? ; [ -f /tmp/{executionId}.err ] && cat /tmp/{executionId}.err > compile_err.txt ; rm -rf /tmp/{executionId} /tmp/{executionId}.err ; exit $RET";
                         break;
 
                     case "csharp":
@@ -242,36 +314,65 @@ namespace dotnetBitSmith.Services {
                         </Project>";
                         await File.WriteAllTextAsync(Path.Combine(tempPath, "solution.csproj"), csproj);
 
-                        shellCmd = "mkdir -p /tmp/build && cp Program.cs solution.csproj /tmp/build/ && cd /tmp/build && dotnet build -c Debug -o out -v q --nologo > /app/compile_err.txt 2>&1 && rm -f /app/compile_err.txt && timeout 5 dotnet out/solution.dll < /app/input.txt";
+                        shellCmd = $"dotnet build -c Debug -o /tmp/{executionId} -v q --nologo -p:UseSharedCompilation=false > /tmp/{executionId}.err 2>&1 && timeout 5 dotnet /tmp/{executionId}/solution.dll < input.txt ; RET=$? ; [ ! -f /tmp/{executionId}/solution.dll ] && [ -f /tmp/{executionId}.err ] && cat /tmp/{executionId}.err > compile_err.txt ; rm -rf /tmp/{executionId} /tmp/{executionId}.err ; exit $RET";
                         break;
 
                     default:
                         throw new NotSupportedException($"Language '{language}' is not supported.");
                 }
 
-                // Volume path mounting
-                var hostPathForDocker = tempPath.Replace("\\", "/");
-                var containerName = $"bitsmith-run-{executionId}";
+                var warmContainerName = NormalizeLanguage(language) switch {
+                    "python" => "bitsmith-sandbox-python",
+                    "cpp" => "bitsmith-sandbox-gcc",
+                    "c" => "bitsmith-sandbox-gcc",
+                    "java" => "bitsmith-sandbox-java",
+                    "csharp" => "bitsmith-sandbox-csharp",
+                    _ => null
+                };
 
-                string extraDockerArgs = "";
-                if (NormalizeLanguage(language) == "csharp") {
-                    extraDockerArgs = "-e DOTNET_CLI_TELEMETRY_OPTOUT=1 -e DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 -e DOTNET_NOLOGO=1 -e NUGET_XMLDOC_MODE=skip -v bitsmith-nuget-cache:/root/.nuget/packages";
+                bool useWarm = false;
+                if (warmContainerName != null) {
+                    useWarm = await IsWarmContainerRunningAsync(warmContainerName);
                 }
 
-                // Run Docker command
-                var args = $"run --rm --name {containerName} -v \"{hostPathForDocker}:/app\" {extraDockerArgs} -w /app {imageName} sh -c \"{shellCmd}\"";
-
-                _logger.LogInformation("Launching Docker container: {ContainerName}", containerName);
-
+                (int ExitCode, string Stdout, string Stderr) runResult;
                 var stopwatch = Stopwatch.StartNew();
-                var runResult = await RunProcessAsync("docker", args, 25000); // 25 seconds execution limit to allow for compilation + startup
-                stopwatch.Stop();
 
+                if (useWarm) {
+                    _logger.LogInformation("Executing solution via warm sandbox container: {WarmContainerName}", warmContainerName);
+                    // Working directory path inside warm sandbox containers is /app/temp-runs/{executionId}
+                    var execArgs = $"exec -w /app/temp-runs/{executionId} {warmContainerName} sh -c \"{shellCmd}\"";
+                    runResult = await RunProcessAsync("docker", execArgs, 25000);
+                } else {
+                    _logger.LogInformation("Warm sandbox container {WarmContainerName} not running. Falling back to cold docker run", warmContainerName);
+                    // Volume path mounting
+                    var hostTempRuns = Environment.GetEnvironmentVariable("HOST_TEMP_RUNS_PATH");
+                    var hostPathForDocker = !string.IsNullOrEmpty(hostTempRuns)
+                        ? $"{hostTempRuns.Replace("\\", "/")}/{executionId}"
+                        : tempPath.Replace("\\", "/");
+                    var containerName = $"bitsmith-run-{executionId}";
+
+                    string extraDockerArgs = "";
+                    if (NormalizeLanguage(language) == "csharp") {
+                        extraDockerArgs = "-e DOTNET_CLI_TELEMETRY_OPTOUT=1 -e DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 -e DOTNET_NOLOGO=1 -e NUGET_XMLDOC_MODE=skip -v bitsmith-nuget-cache:/root/.nuget/packages";
+                    }
+
+                    // Run Docker command
+                    var args = $"run --rm --name {containerName} --network none --memory=\"512m\" --cpus=\"1.5\" --pids-limit=128 -v \"{hostPathForDocker}:/app\" {extraDockerArgs} -w /app {imageName} sh -c \"{shellCmd}\"";
+
+                    _logger.LogInformation("Launching cold Docker container: {ContainerName}", containerName);
+                    runResult = await RunProcessAsync("docker", args, 25000); // 25 seconds execution limit to allow for compilation + startup
+
+                    if (runResult.ExitCode == -2 || runResult.ExitCode == 124) {
+                        _logger.LogWarning("Docker execution timed out. ExitCode: {ExitCode}. Killing container {ContainerName}", runResult.ExitCode, containerName);
+                        CleanupContainer(containerName);
+                    }
+                }
+
+                stopwatch.Stop();
                 var timeMs = (int)stopwatch.ElapsedMilliseconds;
 
                 if (runResult.ExitCode == -2 || runResult.ExitCode == 124) {
-                    _logger.LogWarning("Docker execution timed out. ExitCode: {ExitCode}. Killing container {ContainerName}", runResult.ExitCode, containerName);
-                    CleanupContainer(containerName);
                     return new SandboxResult {
                         Status = "Timeout",
                         Error = "Time Limit Exceeded",
@@ -380,10 +481,15 @@ namespace dotnetBitSmith.Services {
         private async Task<(string MethodName, List<string> ParamTypes, string ReturnType)?> GetProblemMetadataAsync(string problemTitle) {
             await _metadataSemaphore.WaitAsync();
             try {
+                var jsonOptions = new JsonDocumentOptions {
+                    AllowTrailingCommas = true,
+                    CommentHandling = JsonCommentHandling.Skip
+                };
+
                 // First check database for custom metadata
                 var problem = await _context.Problems.AsNoTracking().FirstOrDefaultAsync(p => p.Title == problemTitle);
                 if (problem != null && !string.IsNullOrWhiteSpace(problem.MetaDataJson)) {
-                    using (var doc = JsonDocument.Parse(problem.MetaDataJson)) {
+                    using (var doc = JsonDocument.Parse(problem.MetaDataJson, jsonOptions)) {
                         var metaData = doc.RootElement;
                         var name = metaData.TryGetProperty("name", out var nProp) ? nProp.GetString() ?? "solve" : "solve";
                         var returnType = "integer";
@@ -413,7 +519,7 @@ namespace dotnetBitSmith.Services {
                 if (!File.Exists(jsonPath)) return null;
 
                 var jsonString = await File.ReadAllTextAsync(jsonPath);
-                using (var doc = JsonDocument.Parse(jsonString)) {
+                using (var doc = JsonDocument.Parse(jsonString, jsonOptions)) {
                     var problemsArray = doc.RootElement.GetProperty("problems");
                     foreach (var p in problemsArray.EnumerateArray()) {
                         var title = p.GetProperty("title").GetString();
@@ -1813,26 +1919,52 @@ void print_tree_node(struct TreeNode* root) {
 
         private static string NormalizeOutput(string output, bool allowAnyOrder) {
             output = output.Trim();
-            if (allowAnyOrder && output.StartsWith("[") && output.EndsWith("]")) {
+            if (output.StartsWith("[") && output.EndsWith("]")) {
                 try {
                     var content = output.Substring(1, output.Length - 2);
                     if (string.IsNullOrWhiteSpace(content)) return "[]";
                     var parts = content.Split(',')
-                        .Select(p => int.Parse(p.Trim()))
-                        .OrderBy(x => x)
+                        .Select(p => p.Trim())
                         .ToList();
-                    return "[" + string.Join(",", parts) + "]";
-                } catch {
-                    try {
-                        var content = output.Substring(1, output.Length - 2);
-                        if (string.IsNullOrWhiteSpace(content)) return "[]";
-                        var parts = content.Split(',')
-                            .Select(p => p.Trim())
-                            .OrderBy(x => x, StringComparer.Ordinal)
-                            .ToList();
-                        return "[" + string.Join(",", parts) + "]";
-                    } catch { }
-                }
+                    
+                    var normalizedParts = new List<string>();
+                    bool allInts = true;
+                    var parsedInts = new List<int>();
+                    
+                    foreach (var p in parts) {
+                        if (int.TryParse(p, out int iVal)) {
+                            parsedInts.Add(iVal);
+                            normalizedParts.Add(iVal.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        } else {
+                            allInts = false;
+                            if (double.TryParse(p, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double dVal)) {
+                                normalizedParts.Add(dVal.ToString("G17", System.Globalization.CultureInfo.InvariantCulture));
+                            } else {
+                                normalizedParts.Add(p);
+                            }
+                        }
+                    }
+
+                    if (allowAnyOrder) {
+                        if (allInts) {
+                            parsedInts.Sort();
+                            return "[" + string.Join(",", parsedInts) + "]";
+                        } else {
+                            normalizedParts = normalizedParts.OrderBy(x => {
+                                if (double.TryParse(x, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double val)) {
+                                    return val;
+                                }
+                                return double.MaxValue;
+                            }).ThenBy(x => x, StringComparer.Ordinal).ToList();
+                        }
+                    }
+                    
+                    return "[" + string.Join(",", normalizedParts) + "]";
+                } catch { }
+            }
+
+            if (double.TryParse(output, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double val)) {
+                return val.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
             }
             return output;
         }

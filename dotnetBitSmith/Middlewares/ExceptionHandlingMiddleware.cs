@@ -61,6 +61,10 @@ namespace dotnetBitSmith.Middleware {
                     statusCode = HttpStatusCode.BadRequest; // 400
                     message = ex.Message;
                     break;
+                case UserVerificationRequiredException ex:
+                    statusCode = HttpStatusCode.Forbidden; // 403
+                    message = "verification_required:" + ex.Email;
+                    break;
             }
 
             // We log the error so we (the developer) can see it.

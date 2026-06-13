@@ -133,6 +133,13 @@ namespace dotnetBitSmith.Controllers {
         [ProducesResponseType(typeof(ProblemSummaryModel), StatusCodes.Status200OK)]
         public async Task<ActionResult<ProblemSummaryModel>> SetProblemOfTheDay([FromQuery] string dateStr, [FromQuery] Guid problemId) {
             if (!DateOnly.TryParse(dateStr, out var date)) return BadRequest("Invalid date format.");
+            
+            // Validate that Date is not in the past (allowing for 1 day timezone skew margin)
+            DateOnly today = DateOnly.FromDateTime(DateTime.UtcNow);
+            if (date < today.AddDays(-1)) {
+                return BadRequest("Cannot set the Problem of the Day in the past.");
+            }
+
             var pod = await _problemService.SetProblemOfTheDayAsync(date, problemId);
             return Ok(pod);
         }

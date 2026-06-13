@@ -66,5 +66,18 @@ namespace dotnetBitSmith.Controllers {
             var submissions = await _submissionService.GetMySubmissionsForProblemAsync(problemId, userId);
             return Ok(submissions);
         }
+
+        [HttpGet("{id}")]
+        [ProducesResponseType(typeof(SubmissionDetailModel), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult> GetSubmission(Guid id) {
+            Guid userId = User.GetUserId();
+            var submission = await _submissionService.GetSubmissionByIdAsync(id, userId);
+            if (submission == null) {
+                return NotFound("Submission not found.");
+            }
+            return Ok(submission);
+        }
     }
 }

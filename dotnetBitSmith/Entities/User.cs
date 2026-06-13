@@ -33,6 +33,11 @@ namespace dotnetBitSmith.Entities {
 
         public bool IsEmailVerified { get; set; } = false;
 
+        [StringLength(10)]
+        public string? EmailVerificationOtp { get; set; }
+
+        public DateTime? EmailVerificationOtpExpiry { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }

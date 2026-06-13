@@ -59,19 +59,29 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
 
 builder.Services.AddRateLimiter(options => {
-    options.AddFixedWindowLimiter(policyName: "auth-policy", opt => {
-        opt.PermitLimit = 10;
-        opt.Window = TimeSpan.FromMinutes(1);
-        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        opt.QueueLimit = 5;
-    });
+    options.AddPolicy("auth-policy", context => 
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            factory: partition => new FixedWindowRateLimiterOptions {
+                AutoReplenishment = true,
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }
+        )
+    );
 
-    options.AddFixedWindowLimiter(policyName: "submit-policy", opt => {
-        opt.PermitLimit = 5;
-        opt.Window = TimeSpan.FromMinutes(1);
-        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        opt.QueueLimit = 2;
-    });
+    options.AddPolicy("submit-policy", context => 
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.User.Identity?.Name ?? context.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            factory: partition => new FixedWindowRateLimiterOptions {
+                AutoReplenishment = true,
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }
+        )
+    );
     
     options.AddFixedWindowLimiter(policyName: "post-content-policy", opt => {
         opt.PermitLimit = 100;
@@ -110,6 +120,12 @@ builder.Services.AddScoped<IProblemService, ProblemService>();
 builder.Services.AddScoped<ISolutionService, SolutionService>();
 builder.Services.AddScoped<ISubmissionService, SubmissionService>();
 builder.Services.AddScoped<ICompilationService, DockerCompilationService>();
+builder.Services.AddScoped<IEmailService, SmtpEmailService>();
+
+// Register memory cache & background submission worker dependencies
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<ISubmissionQueue, SubmissionQueue>();
+builder.Services.AddHostedService<SubmissionProcessingWorker>();
 
 builder.Services.AddEndpointsApiExplorer();
 
@@ -178,6 +194,88 @@ using (var scope = app.Services.CreateScope()) {
     var services = scope.ServiceProvider;
     var context = services.GetRequiredService<ApplicationDbContext>();
     context.Database.EnsureCreated();
+
+    // Recommendation C: Ensure index existence on local database
+    var logger = services.GetRequiredService<ILogger<Program>>();
+    logger.LogInformation("Verifying and creating composite database indexes...");
+    try {
+        context.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (
+                SELECT * FROM sys.indexes 
+                WHERE name = 'IX_Submissions_UserId_ProblemId_Status_CreatedAt' 
+                AND object_id = OBJECT_ID('[dbo].[Submissions]')
+            )
+            BEGIN
+                CREATE INDEX IX_Submissions_UserId_ProblemId_Status_CreatedAt 
+                ON [dbo].[Submissions] (UserId, ProblemId, Status, CreatedAt);
+            END
+        ");
+
+        context.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (
+                SELECT * FROM sys.indexes 
+                WHERE name = 'IX_ProblemOfTheDays_Date' 
+                AND object_id = OBJECT_ID('[dbo].[ProblemOfTheDays]')
+            )
+            BEGIN
+                CREATE INDEX IX_ProblemOfTheDays_Date 
+                ON [dbo].[ProblemOfTheDays] (Date);
+            END
+        ");
+        logger.LogInformation("Database indexes verified successfully.");
+    } catch (Exception ex) {
+        logger.LogError(ex, "Failed to create composite database indexes on startup.");
+    }
+
+    logger.LogInformation("Verifying and adding User verification columns...");
+    try {
+        context.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (
+                SELECT * FROM sys.columns 
+                WHERE object_id = OBJECT_ID(N'[dbo].[Users]') 
+                AND name = N'EmailVerificationOtp'
+            )
+            BEGIN
+                ALTER TABLE [dbo].[Users] ADD [EmailVerificationOtp] NVARCHAR(10) NULL;
+            END
+        ");
+
+        context.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (
+                SELECT * FROM sys.columns 
+                WHERE object_id = OBJECT_ID(N'[dbo].[Users]') 
+                AND name = N'EmailVerificationOtpExpiry'
+            )
+            BEGIN
+                ALTER TABLE [dbo].[Users] ADD [EmailVerificationOtpExpiry] DATETIME2 NULL;
+            END
+        ");
+        logger.LogInformation("User verification columns verified successfully.");
+    } catch (Exception ex) {
+        logger.LogError(ex, "Failed to create User verification database columns on startup.");
+    }
+
+    // Precompile stdc++.h in bitsmith-sandbox-gcc container in background to speed up C++ judge times
+    _ = Task.Run(async () => {
+        try {
+            logger.LogInformation("Checking and precompiling stdc++.h in bitsmith-sandbox-gcc container...");
+            var startInfo = new System.Diagnostics.ProcessStartInfo {
+                FileName = "docker",
+                Arguments = "exec bitsmith-sandbox-gcc sh -c \"[ ! -f /usr/local/include/c++/13.4.0/x86_64-linux-gnu/bits/stdc++.h.gch ] && cd /usr/local/include/c++/13.4.0/x86_64-linux-gnu/bits/ && g++ -w -std=c++23 stdc++.h\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var proc = System.Diagnostics.Process.Start(startInfo);
+            if (proc != null) {
+                await proc.WaitForExitAsync();
+                logger.LogInformation("bitsmith-sandbox-gcc stdc++.h precompilation check/run completed.");
+            }
+        } catch (Exception ex) {
+            logger.LogWarning(ex, "Failed to precompile stdc++.h in bitsmith-sandbox-gcc container.");
+        }
+    });
 }
 
 app.Run();

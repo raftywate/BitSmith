@@ -44,7 +44,11 @@ export class AdminPanelComponent implements OnInit {
       takeUntilDestroyed(this.destroyRef)
     ).subscribe(query => {
       this.problemSearch.set(query);
-      this.searchExistingProblems();
+      if (query.trim()) {
+        this.searchExistingProblems();
+      } else {
+        this.existingProblems.set([]);
+      }
     });
 
     this.problemForm.get('hasHints')?.valueChanges.pipe(
@@ -89,6 +93,8 @@ export class AdminPanelComponent implements OnInit {
     { value: 'c', label: 'C' }
   ];
 
+  reviewTestCaseIndex = signal(0);
+
   problemForm: FormGroup = this.fb.group({
     title: ['', [Validators.required, Validators.minLength(5), Validators.maxLength(100)]],
     description: ['', [Validators.required, Validators.minLength(10)]],
@@ -106,6 +112,7 @@ export class AdminPanelComponent implements OnInit {
   });
 
   testCasesForm: FormGroup = this.fb.group({
+    sharedInputLabels: [''],
     testCases: this.fb.array([this.createTestCaseRow(false), this.createTestCaseRow(true)])
   });
 
@@ -152,10 +159,6 @@ export class AdminPanelComponent implements OnInit {
       next: cats => this.categories.set(cats),
       error: err => console.error('Failed to load categories:', err)
     });
-
-    if (this.isEditRoute()) {
-      this.searchExistingProblems();
-    }
 
     const problemId = this.route.snapshot.queryParamMap.get('problemId');
     if (problemId) {
@@ -333,11 +336,24 @@ export class AdminPanelComponent implements OnInit {
   onSubmitProblem() {
     if (this.problemForm.invalid) {
       this.problemForm.markAllAsTouched();
+      this.toastService.error('Please fix the errors in the problem details form before continuing.');
+      return;
+    }
+
+    const val = this.problemForm.getRawValue();
+    const metaJson = val.metaDataJson?.trim();
+    if (!metaJson) {
+      this.toastService.error('Method Signature Metadata is required.');
+      return;
+    }
+    try {
+      JSON.parse(metaJson);
+    } catch (e) {
+      this.toastService.error('Method Signature Metadata must be a valid JSON object.');
       return;
     }
 
     this.isSubmitting.set(true);
-    const val = this.problemForm.getRawValue();
 
     // Build starter code dictionary
     const rawStarterCode = val.starterCode || {};
@@ -357,7 +373,7 @@ export class AdminPanelComponent implements OnInit {
       description: val.description,
       difficulty: val.difficulty,
       starterCode: starterCodeJson,
-      metaDataJson: val.metaDataJson?.trim() || null,
+      metaDataJson: metaJson,
       hints: this.getCleanHints(),
       categoryIDs: this.selectedCategories()
     };
@@ -377,7 +393,7 @@ export class AdminPanelComponent implements OnInit {
       },
       error: (err) => {
         this.isSubmitting.set(false);
-        this.toastService.error(getApiErrorMessage(err, 'Failed to create problem.'));
+        this.toastService.error(getApiErrorMessage(err, 'Failed to save problem details.'));
       }
     });
   }
@@ -385,8 +401,19 @@ export class AdminPanelComponent implements OnInit {
   goToReview() {
     if (this.uploadMode() === 'manual') {
       const hasManualCases = this.testCasesArray.length > 0;
-      if (hasManualCases && this.testCasesForm.invalid) {
+      if (!hasManualCases) {
+        this.toastService.error('Please add at least one test case.');
+        return;
+      }
+      if (this.testCasesForm.invalid) {
         this.testCasesForm.markAllAsTouched();
+        this.toastService.error('Please fill in all required fields for the test cases.');
+        return;
+      }
+    } else {
+      // file mode
+      if (!this.selectedFile()) {
+        this.toastService.error('Please select a file to upload before proceeding.');
         return;
       }
     }
@@ -428,8 +455,13 @@ export class AdminPanelComponent implements OnInit {
 
     // Manual mode — validate manual form
     const hasManualCases = this.testCasesArray.length > 0;
-    if (hasManualCases && this.testCasesForm.invalid) {
+    if (!hasManualCases) {
+      this.toastService.error('Please add at least one test case.');
+      return;
+    }
+    if (this.testCasesForm.invalid) {
       this.testCasesForm.markAllAsTouched();
+      this.toastService.error('Please fix the errors in the test cases before submitting.');
       return;
     }
 
@@ -470,6 +502,7 @@ export class AdminPanelComponent implements OnInit {
     this.problemForm.reset({ difficulty: 'Easy', hasHints: false });
     this.problemForm.setControl('hints', this.fb.array([]));
     this.selectedCategories.set([]);
+    this.testCasesForm.reset({ sharedInputLabels: '' });
     this.testCasesForm.setControl('testCases', this.fb.array([this.createTestCaseRow(false), this.createTestCaseRow(true)]));
     this.createdProblemId.set(null);
     this.editingProblemId.set(null);
@@ -496,6 +529,12 @@ export class AdminPanelComponent implements OnInit {
     this.selectedCategories.set(problem.categories.map(category => category.id));
 
     const editableTestCases = problem.testCases?.length ? problem.testCases : problem.sampleTestCases;
+    
+    const firstLabels = editableTestCases?.[0]?.inputLabels ?? [];
+    this.testCasesForm.patchValue({
+      sharedInputLabels: firstLabels.join('\n')
+    });
+
     this.testCasesForm.setControl(
       'testCases',
       this.fb.array(editableTestCases.length
@@ -517,7 +556,7 @@ export class AdminPanelComponent implements OnInit {
     }
   }
 
-  private getCleanHints(): string[] {
+  getCleanHints(): string[] {
     if (!this.problemForm.get('hasHints')?.value) {
       return [];
     }
@@ -527,18 +566,31 @@ export class AdminPanelComponent implements OnInit {
   }
 
   private getTestCasePayload() {
+    const sharedLabels = this.parseInputLabels(this.testCasesForm.get('sharedInputLabels')?.value);
     return this.testCasesArray.getRawValue().map(testCase => ({
       input: testCase.input,
       expectedOutput: testCase.expectedOutput,
-      inputLabels: this.parseInputLabels(testCase.inputLabelsText),
+      inputLabels: sharedLabels,
       isHidden: testCase.isHidden
     }));
   }
 
-  private parseInputLabels(value: string | null | undefined): string[] {
+  parseInputLabels(value: string | null | undefined): string[] {
     return (value ?? '')
       .split(/\r?\n|,/)
       .map(label => label.trim())
       .filter(label => !!label);
+  }
+
+  getReviewTestCaseInputParts(control: any) {
+    const inputVal = control.get('input')?.value ?? '';
+    const values = inputVal.split(/\r?\n/);
+    const sharedLabelsText = this.testCasesForm.get('sharedInputLabels')?.value;
+    const labels = this.parseInputLabels(sharedLabelsText);
+
+    return values.map((value: string, index: number) => ({
+      label: labels[index]?.trim() || `Input ${index + 1}`,
+      value
+    }));
   }
 }

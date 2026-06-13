@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  database:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: bitsmith-db
+    restart: on-failure
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=YourStrongPassword123!
+    ports:
+      - "1433:1433"
+    volumes:
+      - bitsmith-db-data:/var/opt/mssql
+
+  backend:
+    build:
+      context: ./dotnetBitSmith
+      dockerfile: Dockerfile
+    container_name: bitsmith-backend
+    restart: on-failure
+    environment:
+      - ConnectionStrings__connectionString=Server=database;Database=BitSmithDb;User Id=sa;Password=YourStrongPassword123!;Encrypt=False;TrustServerCertificate=True;
+      - JwtSettings__Key=b6f684c79c9090902ef37f2c3a5110af
+      - AdminSettings__InviteCode=bitsmith-admin-2024
+      - HOST_TEMP_RUNS_PATH=${PWD}/dotnetBitSmith/temp-runs
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./dotnetBitSmith/temp-runs:/app/temp-runs
+    depends_on:
+      - database
+    expose:
+      - "8080"
+
+  frontend:
+    build:
+      context: ./angularBitSmith
+      dockerfile: Dockerfile
+    container_name: bitsmith-frontend
+    restart: on-failure
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  sandbox-python:
+    image: python:3.10-slim
+    container_name: bitsmith-sandbox-python
+    restart: always
+    entrypoint: ["tail", "-f", "/dev/null"]
+    volumes:
+      - ./dotnetBitSmith/temp-runs:/app/temp-runs
+    network_mode: none
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.5'
+
+  sandbox-gcc:
+    image: gcc:13
+    container_name: bitsmith-sandbox-gcc
+    restart: always
+    entrypoint: ["tail", "-f", "/dev/null"]
+    volumes:
+      - ./dotnetBitSmith/temp-runs:/app/temp-runs
+    network_mode: none
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.5'
+
+  sandbox-java:
+    image: eclipse-temurin:21-alpine
+    container_name: bitsmith-sandbox-java
+    restart: always
+    entrypoint: ["tail", "-f", "/dev/null"]
+    volumes:
+      - ./dotnetBitSmith/temp-runs:/app/temp-runs
+    network_mode: none
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.5'
+
+  sandbox-csharp:
+    image: mcr.microsoft.com/dotnet/sdk:8.0
+    container_name: bitsmith-sandbox-csharp
+    restart: always
+    entrypoint: ["tail", "-f", "/dev/null"]
+    volumes:
+      - ./dotnetBitSmith/temp-runs:/app/temp-runs
+      - bitsmith-nuget-cache:/root/.nuget/packages
+    network_mode: none
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.5'
+
+volumes:
+  bitsmith-db-data:
+  bitsmith-nuget-cache:
