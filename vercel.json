@@ -1,4 +1,6 @@
 {
+  "buildCommand": "cd angularBitSmith && npm install && npm run build",
+  "outputDirectory": "angularBitSmith/dist/angular-bit-smith/browser",
   "cleanUrls": true,
   "rewrites": [
     { "source": "/:path*", "destination": "/index.html" }
