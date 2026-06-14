@@ -1,5 +1,4 @@
 {
-  "outputDirectory": "dist/angular-bit-smith/browser",
   "cleanUrls": true,
   "routes": [
     { "handle": "filesystem" },
