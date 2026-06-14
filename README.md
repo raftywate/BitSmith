@@ -8,9 +8,16 @@
 
 ## Screenshots
 
-> _Problems list, problem workspace with Monaco Editor, and user profile with activity calendar._
+| Problems List | Problem Workspace |
+|---|---|
+| ![Problems List](screenshots/problems-list.png) | ![Workspace](screenshots/workspace.png) |
+
+| User Profile | Login |
+|---|---|
+| ![User Profile](screenshots/profile.png) | ![Login](screenshots/login.png) |
 
 ---
+
 
 ## Features
 
@@ -20,7 +27,7 @@
 - 📝 **Monaco Editor** — VS Code's editor engine, with per-language syntax highlighting and a resizable Golden Layout workspace
 - 🔐 **JWT Auth** — Register, verify email with OTP, and log in; invite-code-gated Admin role
 - 📊 **User profiles** — Solved count by difficulty, daily activity calendar, current streak
-- 🧩 **225+ problems** — Auto-seeded from a 2,828-problem dataset on first deploy
+- 🧩 **225+ problems** — Auto-seeded from a curated dataset of LeetCode-style problems for learning and practice
 - 💬 **Solutions & comments** — Write editorial solutions, comment, and vote
 - 📅 **Problem of the Day** — Admin-configurable daily featured problem
 - 🔒 **Rate limiting** — 5 req/min on auth/submit, 100 req/hr on content posting
@@ -273,6 +280,12 @@ Full Swagger docs available at `/swagger` when running locally.
 3. Use the existing `Dockerfile`
 4. Set all environment variables listed above
 5. Mount Docker socket if using warm containers (requires a Docker-capable host)
+
+---
+
+## Disclaimer
+
+The problems included in this project are sourced from [LeetCode](https://leetcode.com) and are used purely for **educational and learning purposes**. This is a non-commercial, personal project built to practice full-stack development. All problem content, titles, and descriptions remain the intellectual property of LeetCode. If you are the rights holder and have concerns, please open an issue.
 
 ---
 
