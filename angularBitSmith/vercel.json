@@ -1,7 +1,8 @@
 {
   "outputDirectory": "dist/angular-bit-smith/browser",
   "cleanUrls": true,
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
