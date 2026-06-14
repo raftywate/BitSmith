@@ -1,217 +1,285 @@
-# BitSmith: A Full-Stack Online Coding Platform
+# Compylr
 
-> A professional, coding practice platform built with a production-grade architecture.
+**A full-stack competitive programming platform** — write, run, and judge code in 5 languages, directly in your browser.
+
+🔗 **Live:** [bit-smith-kappa.vercel.app](https://bit-smith-kappa.vercel.app) &nbsp;|&nbsp; **API:** [compylr-backend.onrender.com](https://compylr-backend.onrender.com)
 
 ---
 
-### 🧠 Tech Stack
+## Screenshots
 
-### 🧩 System Architecture
+> _Problems list, problem workspace with Monaco Editor, and user profile with activity calendar._
+
+---
+
+## Features
+
+- 🧑‍💻 **Multi-language judge** — Submit solutions in Python, C++23, Java, C, and C#
+- 🐳 **Docker sandbox** — Every submission runs in an isolated container (no network, 512 MB RAM, 1.5 vCPU, 128 PID limit, 5-second TLE)
+- ⚡ **Warm containers** — Persistent sandbox containers eliminate cold-start overhead on repeated submissions
+- 📝 **Monaco Editor** — VS Code's editor engine, with per-language syntax highlighting and a resizable Golden Layout workspace
+- 🔐 **JWT Auth** — Register, verify email with OTP, and log in; invite-code-gated Admin role
+- 📊 **User profiles** — Solved count by difficulty, daily activity calendar, current streak
+- 🧩 **225+ problems** — Auto-seeded from a 2,828-problem dataset on first deploy
+- 💬 **Solutions & comments** — Write editorial solutions, comment, and vote
+- 📅 **Problem of the Day** — Admin-configurable daily featured problem
+- 🔒 **Rate limiting** — 5 req/min on auth/submit, 100 req/hr on content posting
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Frontend** | Angular 20, Monaco Editor, Golden Layout, KaTeX, TailwindCSS |
+| **Backend** | ASP.NET Core 8, Entity Framework Core, Npgsql |
+| **Database** | PostgreSQL (Supabase) |
+| **Judge Engine** | Docker (Python 3.10, GCC 13 / C++23, Eclipse Temurin 21, .NET SDK 8) |
+| **Auth** | JWT (HMAC-SHA256), BCrypt, SMTP OTP |
+| **Deployment** | Vercel (frontend), Render (backend), Supabase (database) |
+
+---
+
+## Project Structure
 
 ```
-┌────────────────────────────┐
-│        Frontend UI         │
-│      (Angular Client)      │
-└──────────────┬─────────────┘
-               │ REST API Calls (HTTPS)
-               ▼
-┌────────────────────────────┐
-│      ASP.NET Core API      │
-│   Controllers / Services   │
-│  Auth / Rate Limiting /    │
-│ Exception Middleware       │
-└──────────────┬─────────────┘
-               │ EF Core
-               ▼
-┌────────────────────────────┐
-│      SQL Server DB         │
-│ Migrations / Constraints   │
-│  User / Problem / Submits  │
-└────────────────────────────┘
-
-Async Future Microservice:
-┌────────────────────────────┐
-│  Code Judge Engine (TODO)  │
-│ Docker Sandbox Execution   │
-└────────────────────────────┘
+BitSmithApp/
+├── angularBitSmith/        # Angular 20 SPA
+│   ├── src/app/
+│   │   ├── auth/           # Login, Register, OTP verification
+│   │   ├── problems/       # Problem list, detail, solution editor
+│   │   ├── profile/        # User profile & stats
+│   │   ├── admin/          # Admin dashboard, problem creator, POTD
+│   │   ├── workspace/      # Monaco + Golden Layout dockable IDE
+│   │   └── services/       # HTTP services, auth guards
+│   └── vercel.json
+├── dotnetBitSmith/         # ASP.NET Core 8 REST API
+│   ├── Controllers/        # 8 controllers (Auth, Problem, Submission, User, ...)
+│   ├── Services/           # 12 services including DockerCompilationService
+│   ├── Entities/           # 11 EF Core entities
+│   ├── Data/               # ApplicationDbContext, indexes
+│   ├── Middlewares/        # Global exception handling
+│   ├── Helpers/            # ProblemSeeder
+│   └── problems.json       # 2,828-problem dataset
+├── docker-compose.yml      # Full local stack
+└── vercel.json
 ```
 
-### 📂 Folder Structure
+---
+
+## Architecture
 
 ```
-BitSmith/
-└── dotnetBitSmith/
-      ├── Controllers/
-      │   ├── AuthController.cs
-      │   ├── ProblemController.cs
-      │   └── SubmissionController.cs
-      ├── Data/
-      │   ├── ApplicationDbContext.cs
-      │   └── Migrations/
-      ├── Entities/
-      │   ├── User.cs, Problem.cs, Submission.cs, ... (10 total)
-      ├── Exceptions/
-      │   ├── DuplicateUserException.cs, NotFoundException.cs, ...
-      ├── Interfaces/
-      │   ├── IAuthService.cs
-      │   ├── IProblemService.cs
-      │   └── ISubmissionService.cs
-      ├── Middleware/
-      │   └── ExceptionHandlingMiddleware.cs
-      ├── Models/
-      │   ├── Auth/ (DTOs)
-      │   ├── Problems/ (DTOs)
-      │   └── Submissions/ (DTOs)
-      ├── Services/
-      │   ├── AuthService.cs
-      │   ├── ProblemService.cs
-      │   └── SubmissionService.cs
-      ├── Properties/
-      │   └── launchSettings.json
-      ├── appsettings.Development.json (Git Ignored)
-      ├── appsettings.json
-      └── Program.cs
-
+Browser (Angular SPA)
+        │
+        ▼ HTTP / REST
+ASP.NET Core 8 API
+   ├── Auth (JWT + OTP)
+   ├── Rate Limiter (ASP.NET Core built-in)
+   ├── Problem / Solution / Comment / Vote endpoints
+   ├── Submission endpoint ──► Channel<Guid> Queue (cap: 1,000)
+   │                                   │
+   │                    BackgroundService Worker
+   │                                   │
+   │                     DockerCompilationService
+   │                     ┌─────────────────────────┐
+   │                     │  docker exec (warm)  OR  │
+   │                     │  docker run  (cold)       │
+   │                     │  --network none           │
+   │                     │  --memory 512m            │
+   │                     │  --cpus 1.5               │
+   │                     │  --pids-limit 128         │
+   │                     └─────────────────────────┘
+   └── IMemoryCache (1-hr TTL on problem details)
+        │
+        ▼
+   PostgreSQL (Supabase)
 ```
 
-> Clean, modular structure following SOLID and Clean Architecture principles.
-
-## 📋 Table of Contents
-
-- [About The Project](#about-the-project)
-- [✨ Key Features](#-key-features)
-- [🚀 Implemented API Endpoints](#-implemented-api-endpoints)
-- [🛡️ Architectural &amp; Security Highlights](#-architectural--security-highlights)
-- [🛠️ Getting Started](#-getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation &amp; Setup](#installation--setup)
-- [🗺️ Roadmap](#-roadmap)
-
 ---
 
-## 🎯 About The Project
-
-BitSmith is a comprehensive online coding platform similar to LeetCode.
-The backend REST API (**dotnetBitSmith**) is fully functional for core features.
-
-Focus so far: **Security**, **Performance**, **Clean Architecture**, **Scalability**
-
-### **Primary Tech Stack**
-
-- **Backend:** ASP.NET Core 8
-- **Database:** SQL Server
-- **ORM:** Entity Framework Core
-- **Authentication:** JWT + BCrypt
-- **Architecture:** Clean Architecture (SOLID + DRY)
-
----
-
-## ✨ Key Features
-
-- ✅ Secure JWT Authentication (BCrypt hashing)
-- ✅ Role-Based Access Control (RBAC)
-- ✅ API Rate Limiting
-- ✅ EF Core Transactions for atomic operations
-- ✅ Fully layered architecture — Controllers / Services / Repos / DTOs
-- ✅ Detailed exception handling middleware
-
----
-
-## 🚀 Implemented API Endpoints
-
-### **Authentication (`/api/auth`)**
-
-| Method | Endpoint               | Access | Description                         |
-| ------ | ---------------------- | ------ | ----------------------------------- |
-| POST   | `/api/auth/register` | Public | Register new user (hash + validate) |
-| POST   | `/api/auth/login`    | Public | Login and get JWT token             |
-
-### **Problems (`/api/problem`)**
-
-| Method | Endpoint              | Access     | Description               |
-| ------ | --------------------- | ---------- | ------------------------- |
-| GET    | `/api/problem`      | Public     | Get all problem summaries |
-| GET    | `/api/problem/{id}` | Public     | Get detailed problem info |
-| POST   | `/api/problem`      | Admin Only | Create a new problem      |
-
-### **Submissions (`/api/submission`)**
-
-| Method | Endpoint            | Access             | Description                   |
-| ------ | ------------------- | ------------------ | ----------------------------- |
-| POST   | `/api/submission` | Authenticated User | Submit code (status: Pending) |
-
----
-
-## 🛡️ Architectural & Security Highlights
-
-- **Global Exception Handling Middleware**
-- **JWT w/ Secure Secret Key Storage**
-- **BCrypt Password Hashing**
-- **Rate Limiting on login & submissions**
-- **EF Core migrations with complete schema**
-- **Efficient LINQ projections**
-- **Transactional DB operations for Admin actions**
-
----
-
-## 🛠️ Getting Started
+## Local Development
 
 ### Prerequisites
 
-- ✅ .NET 8 SDK
-- ✅ SQL Server / LocalDB
-- ✅ JWT Secret Key
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8)
+- [Node.js 20+](https://nodejs.org/)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [PostgreSQL](https://www.postgresql.org/) (or use the Docker Compose database service)
 
 ---
 
-### Installation & Setup
+### 1. Clone the repo
 
 ```bash
 git clone https://github.com/raftywate/BitSmith.git
-cd BitSmith/dotnetBitSmith
+cd BitSmith
 ```
 
-Create appsettings.Development.json inside dotnetBitSmith/:
+---
 
-```
+### 2. Backend setup
+
+Create `dotnetBitSmith/appsettings.Development.json` (this file is git-ignored):
+
+```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=BitSmithDb;Trusted_Connection=True;Encrypt=False;"
+    "connectionString": "Host=localhost;Database=BitSmithDb;Username=postgres;Password=YOUR_PG_PASSWORD"
   },
   "JwtSettings": {
-    "Key": "YOUR_SUPER_SECRET_32_CHARACTER_PLUS_KEY_GOES_HERE"
+    "Key": "YOUR_JWT_SECRET_MIN_32_CHARS_LONG"
+  },
+  "AdminSettings": {
+    "InviteCode": "YOUR_ADMIN_INVITE_CODE"
+  },
+  "SmtpSettings": {
+    "Host": "smtp.gmail.com",
+    "Port": "587",
+    "Username": "your@gmail.com",
+    "Password": "your-gmail-app-password",
+    "FromEmail": "your@gmail.com"
   }
 }
 ```
 
-Create database:
+> **Note:** For Gmail, generate an [App Password](https://myaccount.google.com/apppasswords) (requires 2FA). If SMTP is not configured, the app auto-verifies accounts as a fallback.
 
-```
-dotnet ef database update
-```
+Start the backend:
 
-Run API:
-
-```
+```bash
+cd dotnetBitSmith
 dotnet run
 ```
 
-Swagger UI will be available at:
+The API starts on `http://localhost:5000`. On first run it:
+1. Auto-creates all database tables
+2. Seeds 225 problems (75 Easy / 100 Medium / 50 Hard) from `problems.json` if the DB is empty
+3. Creates composite indexes for query performance
 
+---
+
+### 3. Start sandbox containers (required for code execution)
+
+The judge engine uses Docker containers as sandboxes. Start the warm containers:
+
+```bash
+docker compose up sandbox-python sandbox-gcc sandbox-java sandbox-csharp -d
 ```
-https://localhost:5078/swagger
+
+> Without these, submissions will fall back to cold `docker run` (slower, but still functional as long as Docker is running).
+
+---
+
+### 4. Frontend setup
+
+```bash
+cd angularBitSmith
+npm install
+npm start
 ```
 
-## 🗺️ Roadmap
+The Angular dev server starts on `http://localhost:4200`.
 
-- [ ] Add read endpoints for submissions (`get my submissions`)
-- [ ] Build Angular frontend (`angularBitSmith`)
-- [ ] Implement judging engine (`ICompilationService`)
+> The dev environment points to `http://localhost:5000/api`. To change this, edit `src/environments/environment.ts`.
 
-## ⭐ Future Enhancements
+---
 
-- Docker sandboxed judge system
-- Leaderboards & performance analytics
-- Community discussions / forums
-- Problem difficulty ratings
-- Admin dashboard UI
+### 5. Full stack with Docker Compose (alternative)
+
+To run the entire stack (database + backend + frontend + sandboxes) in Docker:
+
+```bash
+docker compose up --build
+```
+
+Access the app at `http://localhost:80`.
+
+---
+
+## Environment Variables (Production / Render)
+
+Set these in your Render backend service environment:
+
+| Variable | Description |
+|---|---|
+| `ConnectionStrings__connectionString` | PostgreSQL connection string (use Supabase pooler URL) |
+| `JwtSettings__Key` | JWT signing secret (min 32 chars) |
+| `AdminSettings__InviteCode` | Secret code that grants Admin role on registration |
+| `SmtpSettings__Host` | SMTP host (e.g. `smtp.gmail.com`) |
+| `SmtpSettings__Port` | SMTP port (e.g. `587`) |
+| `SmtpSettings__Username` | SMTP username / email |
+| `SmtpSettings__Password` | SMTP password / app password |
+| `SmtpSettings__FromEmail` | From address for outgoing emails |
+| `HOST_TEMP_RUNS_PATH` | Host path for temp run directories (Docker volume mount) |
+
+---
+
+## Seeding Problems
+
+The app auto-seeds on startup if the database is empty. To manually trigger a full re-seed:
+
+```bash
+cd dotnetBitSmith
+dotnet run -- --import-leetcode
+```
+
+This runs the full `ProblemSeeder` against `problems.json` with verbose logging.
+
+---
+
+## Admin Access
+
+On the Register page, enter the configured `InviteCode` in the invite code field to create an Admin account. Admins get access to:
+
+- `/admin` — Dashboard with stats
+- `/admin/problem` — Create / edit problems with test cases
+- `/admin/pod` — Set the Problem of the Day
+
+---
+
+## API Overview
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/auth/register` | Register a new user |
+| `POST` | `/api/auth/login` | Login and receive JWT |
+| `POST` | `/api/auth/verify-otp` | Verify email OTP |
+| `GET` | `/api/problems` | Paginated problem list with filters |
+| `GET` | `/api/problems/{slug}` | Problem detail with test cases |
+| `POST` | `/api/submissions` | Submit a solution for judging |
+| `GET` | `/api/submissions/{id}` | Poll submission result |
+| `POST` | `/api/submissions/run` | Run against sample test cases |
+| `POST` | `/api/submissions/run-code` | Run arbitrary code with custom stdin |
+| `GET` | `/api/users/{username}` | Public user profile & stats |
+| `GET` | `/api/solutions/{problemId}` | Community solutions for a problem |
+
+Full Swagger docs available at `/swagger` when running locally.
+
+---
+
+## Deployment
+
+### Frontend → Vercel
+
+1. Connect your GitHub repo to [Vercel](https://vercel.com)
+2. Set **Root Directory** to the repo root
+3. Vercel uses `vercel.json` at the root to build and route the SPA
+
+### Backend → Render
+
+1. Create a new **Web Service** on [Render](https://render.com)
+2. Set **Root Directory** to `dotnetBitSmith`
+3. Use the existing `Dockerfile`
+4. Set all environment variables listed above
+5. Mount Docker socket if using warm containers (requires a Docker-capable host)
+
+---
+
+## License
+
+MIT
+
+---
+
+<p align="center">Built by <a href="https://github.com/raftywate">@raftywate</a></p>
