@@ -376,6 +376,9 @@
   background: var(--surface-2);
   text-align: left;
   transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
 }
 
 .problem-row:hover {
