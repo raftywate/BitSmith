@@ -19,6 +19,11 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 AppContext.SetSwitch("System.Net.DisableIPv6", true);
 
+// Prevent inotify limit issues on Docker/Render by disabling reloadOnChange for configuration
+// and switching file monitoring to polling mode as a fallback.
+Environment.SetEnvironmentVariable("hostBuilder__reloadConfigOnChange", "false");
+Environment.SetEnvironmentVariable("DOTNET_USE_POLLING_FILE_WATCHER", "true");
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Environment.WebRootPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot");
 const string DEV_CORS_POLICY = "AllowDevOrigin";
