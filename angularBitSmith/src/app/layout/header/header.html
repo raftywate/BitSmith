@@ -2,7 +2,11 @@
     <nav class="header glass-panel">
         <div class="brand-container">
             <a routerLink="/problems" class="brand" title="Home Page">
-                <span class="brand__mark">CY</span>
+                @if (themeService.isDark()) {
+                    <img src="logo-dark-128.png" alt="Compylr Logo" class="brand__logo">
+                } @else {
+                    <img src="logo-light-128.png" alt="Compylr Logo" class="brand__logo">
+                }
                 @if (isHomePage()) {
                 <span class="brand__copy">
                     <span class="brand__name">Compylr</span>
