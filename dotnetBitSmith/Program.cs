@@ -313,10 +313,11 @@ using (var scope = app.Services.CreateScope()) {
     // Precompile stdc++.h in bitsmith-sandbox-gcc container in background to speed up C++ judge times
     _ = Task.Run(async () => {
         try {
-            logger.LogInformation("Checking and precompiling stdc++.h in bitsmith-sandbox-gcc container...");
+            var sandboxContainer = app.Configuration["SandboxSettings:CppContainerName"] ?? "bitsmith-sandbox-gcc";
+            logger.LogInformation("Checking and precompiling stdc++.h in {ContainerName} container...", sandboxContainer);
             var startInfo = new System.Diagnostics.ProcessStartInfo {
                 FileName = "docker",
-                Arguments = "exec bitsmith-sandbox-gcc sh -c \"[ ! -f /usr/local/include/c++/13.4.0/x86_64-linux-gnu/bits/stdc++.h.gch ] && cd /usr/local/include/c++/13.4.0/x86_64-linux-gnu/bits/ && g++ -w -std=c++23 stdc++.h\"",
+                Arguments = $"exec {sandboxContainer} sh -lc \"header=$(find /usr/local/include/c++ /usr/include/c++ -path '*/bits/stdc++.h' -print -quit 2>/dev/null); if [ -f \\\"$header\\\" ] && [ ! -f \\\"$header.gch\\\" ]; then cd $(dirname \\\"$header\\\") && timeout 25s g++ -w -std=c++23 stdc++.h; fi\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -325,10 +326,47 @@ using (var scope = app.Services.CreateScope()) {
             using var proc = System.Diagnostics.Process.Start(startInfo);
             if (proc != null) {
                 await proc.WaitForExitAsync();
-                logger.LogInformation("bitsmith-sandbox-gcc stdc++.h precompilation check/run completed.");
+                logger.LogInformation("{ContainerName} stdc++.h precompilation check/run completed.", sandboxContainer);
             }
         } catch (Exception ex) {
             logger.LogWarning(ex, "Failed to precompile stdc++.h in bitsmith-sandbox-gcc container.");
+        }
+    });
+
+    // Warm up the Judge0 VM by sending a dummy C++ submission at startup.
+    // This primes the OS page cache on the VM so the first real user submission
+    // compiles in ~9s instead of ~30s (cold start penalty).
+    _ = Task.Run(async () => {
+        try {
+            var useDockerForCpp = app.Configuration.GetValue("SandboxSettings:UseDockerForCpp", true);
+            if (useDockerForCpp) return;
+
+            var judge0Url = app.Configuration["Judge0Settings:ApiUrl"] ?? "http://localhost:2358";
+            var judge0Key = app.Configuration["Judge0Settings:ApiKey"] ?? "";
+
+            // Only warm up if pointing at a self-hosted VM (not RapidAPI)
+            if (judge0Url.Contains("rapidapi", StringComparison.OrdinalIgnoreCase)) return;
+
+            await Task.Delay(5000); // Give containers time to be fully ready
+
+            logger.LogInformation("Warming up Judge0 VM with a dummy C++ submission...");
+            using var httpClient = new System.Net.Http.HttpClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(90);
+            if (!string.IsNullOrEmpty(judge0Key)) {
+                httpClient.DefaultRequestHeaders.Add("X-RapidAPI-Key", judge0Key);
+            }
+
+            var warmupPayload = new {
+                source_code = "#include<bits/stdc++.h>\nusing namespace std;\nint main(){cout<<1;return 0;}",
+                language_id = 54,
+                stdin = ""
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(warmupPayload);
+            var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            var response = await httpClient.PostAsync($"{judge0Url}/submissions?base64_encoded=false&wait=true", content);
+            logger.LogInformation("Judge0 VM warm-up completed. Status: {Status}", response.StatusCode);
+        } catch (Exception ex) {
+            logger.LogWarning(ex, "Judge0 VM warm-up failed (non-critical).");
         }
     });
 }

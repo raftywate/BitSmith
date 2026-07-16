@@ -23,7 +23,10 @@ services:
       - ConnectionStrings__connectionString=Server=database;Database=BitSmithDb;User Id=sa;Password=YourStrongPassword123!;Encrypt=False;TrustServerCertificate=True;
       - JwtSettings__Key=b6f684c79c9090902ef37f2c3a5110af
       - AdminSettings__InviteCode=bitsmith-admin-2024
-      - HOST_TEMP_RUNS_PATH=${PWD}/dotnetBitSmith/temp-runs
+      - SandboxSettings__UseDockerForCpp=true
+      - SandboxSettings__TempRunsPath=/app/temp-runs
+      - SandboxSettings__ContainerTempRunsPath=/app/temp-runs
+      - SandboxSettings__CppContainerName=bitsmith-sandbox-gcc
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./dotnetBitSmith/temp-runs:/app/temp-runs

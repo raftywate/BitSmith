@@ -19,6 +19,13 @@ namespace dotnetBitSmith.Services {
         private readonly string _judge0ApiUrl;
         private readonly string _judge0ApiKey;
         private readonly string _judge0ApiHost;
+        private readonly bool _useDockerForCpp;
+        private readonly string _cppSandboxContainer;
+        private readonly string _hostTempRunsPath;
+        private readonly string _containerTempRunsPath;
+        private static readonly SemaphoreSlim _cppSandboxWarmupSemaphore = new SemaphoreSlim(1, 1);
+        private static bool _cppSandboxWarmupAttempted;
+        private static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
 
         public Judge0CompilationService(
             ApplicationDbContext context,
@@ -30,6 +37,12 @@ namespace dotnetBitSmith.Services {
             _httpClientFactory = httpClientFactory;
             _judge0ApiUrl = configuration["Judge0Settings:ApiUrl"] ?? "http://localhost:2358";
             _judge0ApiKey = configuration["Judge0Settings:ApiKey"] ?? "";
+            _useDockerForCpp = configuration.GetValue("SandboxSettings:UseDockerForCpp", true);
+            _cppSandboxContainer = configuration["SandboxSettings:CppContainerName"] ?? "bitsmith-sandbox-gcc";
+            _hostTempRunsPath = configuration["SandboxSettings:TempRunsPath"]
+                ?? Environment.GetEnvironmentVariable("SANDBOX_TEMP_RUNS_PATH")
+                ?? Path.Combine(Directory.GetCurrentDirectory(), "temp-runs");
+            _containerTempRunsPath = (configuration["SandboxSettings:ContainerTempRunsPath"] ?? "/app/temp-runs").TrimEnd('/');
             
             if (Uri.TryCreate(_judge0ApiUrl, UriKind.Absolute, out var uri)) {
                 _judge0ApiHost = uri.Host;
@@ -269,6 +282,15 @@ namespace dotnetBitSmith.Services {
         }
 
         public async Task<SandboxResult> ExecuteInSandboxAsync(string language, string wrappedCode, string stdin) {
+            if (_useDockerForCpp && NormalizeLanguage(language) == "cpp") {
+                var dockerResult = await TryExecuteCppInWarmDockerSandboxAsync(wrappedCode, stdin);
+                if (dockerResult != null) {
+                    return dockerResult;
+                }
+
+                _logger.LogWarning("Falling back to Judge0 because the Docker C++ sandbox is unavailable.");
+            }
+
             _logger.LogInformation("Sending execution request to Judge0...");
             try {
                 int languageId = GetLanguageId(language);
@@ -379,6 +401,145 @@ namespace dotnetBitSmith.Services {
             }
         }
 
+        private async Task<SandboxResult?> TryExecuteCppInWarmDockerSandboxAsync(string wrappedCode, string stdin) {
+            var stopwatch = Stopwatch.StartNew();
+            var runId = "run-" + Guid.NewGuid().ToString("N");
+            var hostRunPath = Path.Combine(_hostTempRunsPath, runId);
+            var containerRunPath = $"{_containerTempRunsPath}/{runId}";
+
+            try {
+                if (!await EnsureCppSandboxReadyAsync()) {
+                    return null;
+                }
+
+                Directory.CreateDirectory(hostRunPath);
+                await File.WriteAllTextAsync(Path.Combine(hostRunPath, "main.cpp"), wrappedCode, Utf8NoBom);
+                await File.WriteAllTextAsync(Path.Combine(hostRunPath, "stdin.txt"), stdin ?? string.Empty, Utf8NoBom);
+
+                var compileArgs =
+                    $"exec {_cppSandboxContainer} sh -lc \"cd {containerRunPath} && " +
+                    "timeout 12s g++ -std=c++23 -O0 -pipe main.cpp -o main\"";
+                var compile = await RunProcessAsync("docker", compileArgs, 20000);
+
+                if (compile.ExitCode == -2) {
+                    return new SandboxResult {
+                        Status = "Timeout",
+                        Error = "Compilation timed out.",
+                        ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds
+                    };
+                }
+
+                if (compile.ExitCode != 0) {
+                    return new SandboxResult {
+                        Status = "CompileError",
+                        Error = LimitOutput(compile.Stderr + compile.Stdout),
+                        ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds
+                    };
+                }
+
+                var runArgs =
+                    $"exec --user nobody {_cppSandboxContainer} sh -lc \"cd {containerRunPath} && " +
+                    "ulimit -t 2 && ulimit -f 1024 && ulimit -v 524288 && exec timeout 3s ./main < stdin.txt\"";
+                var run = await RunProcessAsync("docker", runArgs, 5000);
+                stopwatch.Stop();
+
+                if (run.ExitCode == -2 || run.ExitCode == 124 || run.ExitCode == 137) {
+                    return new SandboxResult {
+                        Status = "Timeout",
+                        Error = "Time Limit Exceeded",
+                        ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds
+                    };
+                }
+
+                if (run.ExitCode != 0) {
+                    return new SandboxResult {
+                        Status = "RuntimeError",
+                        Error = LimitOutput(run.Stderr + run.Stdout),
+                        ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds
+                    };
+                }
+
+                if (IsSandboxInfrastructureError(run.Stderr)) {
+                    return new SandboxResult {
+                        Status = "RuntimeError",
+                        Error = LimitOutput(run.Stderr),
+                        ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds
+                    };
+                }
+
+                return new SandboxResult {
+                    Status = "Success",
+                    Stdout = run.Stdout,
+                    Error = null,
+                    ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds
+                };
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Docker C++ sandbox execution failed before code ran.");
+                return null;
+            } finally {
+                TryDeleteRunDirectory(hostRunPath);
+            }
+        }
+
+        private async Task<bool> EnsureCppSandboxReadyAsync() {
+            if (!await IsWarmContainerRunningAsync(_cppSandboxContainer)) {
+                var start = await RunProcessAsync("docker", $"start {_cppSandboxContainer}", 5000);
+                if (start.ExitCode != 0 || !await IsWarmContainerRunningAsync(_cppSandboxContainer)) {
+                    _logger.LogWarning("C++ sandbox container {ContainerName} is not running and could not be started: {Error}",
+                        _cppSandboxContainer, start.Stderr);
+                    return false;
+                }
+            }
+
+            await _cppSandboxWarmupSemaphore.WaitAsync();
+            try {
+                if (_cppSandboxWarmupAttempted) {
+                    return true;
+                }
+
+                _cppSandboxWarmupAttempted = true;
+                var warmupArgs =
+                    $"exec {_cppSandboxContainer} sh -lc \"" +
+                    "header=$(find /usr/local/include/c++ /usr/include/c++ -path '*/bits/stdc++.h' -print -quit 2>/dev/null); " +
+                    "if [ -f \\\"$header\\\" ] && [ ! -f \\\"$header.gch\\\" ]; then " +
+                    "cd $(dirname \\\"$header\\\") && timeout 25s g++ -std=c++23 -w stdc++.h; fi\"";
+                var warmup = await RunProcessAsync("docker", warmupArgs, 30000);
+                if (warmup.ExitCode != 0) {
+                    _logger.LogWarning("C++ sandbox PCH warmup did not complete successfully: {Error}", warmup.Stderr);
+                }
+            } finally {
+                _cppSandboxWarmupSemaphore.Release();
+            }
+
+            return true;
+        }
+
+        private static string LimitOutput(string value, int maxLength = 8000) {
+            if (string.IsNullOrEmpty(value) || value.Length <= maxLength) {
+                return value;
+            }
+
+            return value.Substring(0, maxLength) + "\n[output truncated]";
+        }
+
+        private static bool IsSandboxInfrastructureError(string? stderr) {
+            if (string.IsNullOrWhiteSpace(stderr)) {
+                return false;
+            }
+
+            return stderr.Contains("ulimit:", StringComparison.OrdinalIgnoreCase)
+                || stderr.Contains("sh:", StringComparison.OrdinalIgnoreCase)
+                || stderr.Contains("timeout:", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void TryDeleteRunDirectory(string path) {
+            try {
+                if (Directory.Exists(path)) {
+                    Directory.Delete(path, true);
+                }
+            } catch { }
+        }
+
         private static int GetLanguageId(string language) {
             switch (NormalizeLanguage(language)) {
                 case "python":
@@ -396,7 +557,7 @@ namespace dotnetBitSmith.Services {
             }
         }
 
-        private async Task<(int ExitCode, string Stdout, string Stderr)> RunProcessAsync(string fileName, string arguments, int timeoutMs) {
+        private async Task<(int ExitCode, string Stdout, string Stderr)> RunProcessAsync(string fileName, string arguments, int timeoutMs, int maxOutputChars = 65536) {
             using (var process = new Process()) {
                 process.StartInfo = new ProcessStartInfo {
                     FileName = fileName,
@@ -414,11 +575,11 @@ namespace dotnetBitSmith.Services {
                 using (var errorWaitHandle = new AutoResetEvent(false)) {
                     process.OutputDataReceived += (sender, e) => {
                         if (e.Data == null) outputWaitHandle.Set();
-                        else stdoutBuilder.AppendLine(e.Data);
+                        else if (stdoutBuilder.Length < maxOutputChars) stdoutBuilder.AppendLine(e.Data);
                     };
                     process.ErrorDataReceived += (sender, e) => {
                         if (e.Data == null) errorWaitHandle.Set();
-                        else stderrBuilder.AppendLine(e.Data);
+                        else if (stderrBuilder.Length < maxOutputChars) stderrBuilder.AppendLine(e.Data);
                     };
 
                     process.Start();
