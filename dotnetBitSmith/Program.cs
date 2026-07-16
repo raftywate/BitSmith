@@ -172,7 +172,7 @@ builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<IProblemService, ProblemService>();
 builder.Services.AddScoped<ISolutionService, SolutionService>();
 builder.Services.AddScoped<ISubmissionService, SubmissionService>();
-builder.Services.AddScoped<ICompilationService, DockerCompilationService>();
+builder.Services.AddScoped<ICompilationService, Judge0CompilationService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 
 // Register memory cache & background submission worker dependencies

@@ -3,6 +3,8 @@ using dotnetBitSmith.Entities;
 using dotnetBitSmith.Interfaces;
 using dotnetBitSmith.Entities.Enums;
 using dotnetBitSmith.Models.Submissions;
+using dotnetBitSmith.Models.Judge0;
+using System.Net.Http;
 using System.Text.Json;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
@@ -10,13 +12,30 @@ using System.Diagnostics;
 using System.IO;
 
 namespace dotnetBitSmith.Services {
-    public class DockerCompilationService : ICompilationService {
+    public class Judge0CompilationService : ICompilationService {
         private readonly ApplicationDbContext _context;
-        private readonly ILogger<DockerCompilationService> _logger;
+        private readonly ILogger<Judge0CompilationService> _logger;
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly string _judge0ApiUrl;
+        private readonly string _judge0ApiKey;
+        private readonly string _judge0ApiHost;
 
-        public DockerCompilationService(ApplicationDbContext context, ILogger<DockerCompilationService> logger) {
+        public Judge0CompilationService(
+            ApplicationDbContext context,
+            ILogger<Judge0CompilationService> logger,
+            IConfiguration configuration,
+            IHttpClientFactory httpClientFactory) {
             _context = context;
             _logger = logger;
+            _httpClientFactory = httpClientFactory;
+            _judge0ApiUrl = configuration["Judge0Settings:ApiUrl"] ?? "http://localhost:2358";
+            _judge0ApiKey = configuration["Judge0Settings:ApiKey"] ?? "";
+            
+            if (Uri.TryCreate(_judge0ApiUrl, UriKind.Absolute, out var uri)) {
+                _judge0ApiHost = uri.Host;
+            } else {
+                _judge0ApiHost = "localhost";
+            }
         }
 
         public async Task<Submission> JudgeSubmissionAsync(Submission submission) {
@@ -250,172 +269,130 @@ namespace dotnetBitSmith.Services {
         }
 
         public async Task<SandboxResult> ExecuteInSandboxAsync(string language, string wrappedCode, string stdin) {
-            var executionId = Guid.NewGuid().ToString("N");
-            var baseTempPath = Path.Combine(Directory.GetCurrentDirectory(), "temp-runs");
-            var tempPath = Path.Combine(baseTempPath, executionId);
-
+            _logger.LogInformation("Sending execution request to Judge0...");
             try {
-                if (!Directory.Exists(baseTempPath)) {
-                    Directory.CreateDirectory(baseTempPath);
-                }
-                Directory.CreateDirectory(tempPath);
-
-                // Write stdin to file
-                await File.WriteAllTextAsync(Path.Combine(tempPath, "input.txt"), stdin);
-
-                string imageName;
-                string shellCmd;
-                string sourceFile;
-
-                switch (NormalizeLanguage(language)) {
-                    case "python":
-                        imageName = "python:3.10-slim";
-                        sourceFile = "solution.py";
-                        await File.WriteAllTextAsync(Path.Combine(tempPath, sourceFile), wrappedCode);
-                        shellCmd = "timeout 5 python -B solution.py < input.txt";
-                        break;
-
-                    case "cpp":
-                        imageName = "gcc:13";
-                        sourceFile = "solution.cpp";
-                        await File.WriteAllTextAsync(Path.Combine(tempPath, sourceFile), wrappedCode);
-                        shellCmd = $"g++ -w -std=c++23 solution.cpp -o /tmp/{executionId} 2> /tmp/{executionId}.err && timeout 5 /tmp/{executionId} < input.txt ; RET=$? ; [ -f /tmp/{executionId}.err ] && cat /tmp/{executionId}.err > compile_err.txt ; rm -f /tmp/{executionId} /tmp/{executionId}.err ; exit $RET";
-                        break;
-
-                    case "c":
-                        imageName = "gcc:13";
-                        sourceFile = "solution.c";
-                        await File.WriteAllTextAsync(Path.Combine(tempPath, sourceFile), wrappedCode);
-                        shellCmd = $"gcc -w solution.c -o /tmp/{executionId} -lm 2> /tmp/{executionId}.err && timeout 5 /tmp/{executionId} < input.txt ; RET=$? ; [ -f /tmp/{executionId}.err ] && cat /tmp/{executionId}.err > compile_err.txt ; rm -f /tmp/{executionId} /tmp/{executionId}.err ; exit $RET";
-                        break;
-
-                    case "java":
-                        imageName = "eclipse-temurin:21-alpine";
-                        sourceFile = "SolutionRunner.java";
-                        await File.WriteAllTextAsync(Path.Combine(tempPath, sourceFile), wrappedCode);
-                        shellCmd = $"mkdir -p /tmp/{executionId} && javac -nowarn -d /tmp/{executionId} SolutionRunner.java 2> /tmp/{executionId}.err && timeout 5 java -cp /tmp/{executionId} SolutionRunner < input.txt ; RET=$? ; [ -f /tmp/{executionId}.err ] && cat /tmp/{executionId}.err > compile_err.txt ; rm -rf /tmp/{executionId} /tmp/{executionId}.err ; exit $RET";
-                        break;
-
-                    case "csharp":
-                        imageName = "mcr.microsoft.com/dotnet/sdk:8.0";
-                        sourceFile = "Program.cs";
-                        await File.WriteAllTextAsync(Path.Combine(tempPath, sourceFile), wrappedCode);
-
-                        // Write temporary .csproj file
-                        string csproj = @"<Project Sdk=""Microsoft.NET.Sdk"">
-                          <PropertyGroup>
-                            <OutputType>Exe</OutputType>
-                            <TargetFramework>net8.0</TargetFramework>
-                            <ImplicitUsings>enable</ImplicitUsings>
-                            <Nullable>disable</Nullable>
-                            <WarningLevel>0</WarningLevel>
-                            <AnalysisMode>None</AnalysisMode>
-                          </PropertyGroup>
-                        </Project>";
-                        await File.WriteAllTextAsync(Path.Combine(tempPath, "solution.csproj"), csproj);
-
-                        shellCmd = $"dotnet build -c Debug -o /tmp/{executionId} -v q --nologo -p:UseSharedCompilation=false > /tmp/{executionId}.err 2>&1 && timeout 5 dotnet /tmp/{executionId}/solution.dll < input.txt ; RET=$? ; [ ! -f /tmp/{executionId}/solution.dll ] && [ -f /tmp/{executionId}.err ] && cat /tmp/{executionId}.err > compile_err.txt ; rm -rf /tmp/{executionId} /tmp/{executionId}.err ; exit $RET";
-                        break;
-
-                    default:
-                        throw new NotSupportedException($"Language '{language}' is not supported.");
-                }
-
-                var warmContainerName = NormalizeLanguage(language) switch {
-                    "python" => "bitsmith-sandbox-python",
-                    "cpp" => "bitsmith-sandbox-gcc",
-                    "c" => "bitsmith-sandbox-gcc",
-                    "java" => "bitsmith-sandbox-java",
-                    "csharp" => "bitsmith-sandbox-csharp",
-                    _ => null
+                int languageId = GetLanguageId(language);
+                
+                var createRequest = new Judge0CreateSubmissionRequest {
+                    LanguageId = languageId,
+                    SourceCode = wrappedCode,
+                    StandardInputs = stdin
                 };
 
-                bool useWarm = false;
-                if (warmContainerName != null) {
-                    useWarm = await IsWarmContainerRunningAsync(warmContainerName);
+                var client = _httpClientFactory.CreateClient();
+                
+                if (!string.IsNullOrEmpty(_judge0ApiKey)) {
+                    client.DefaultRequestHeaders.Add("X-RapidAPI-Key", _judge0ApiKey);
+                    client.DefaultRequestHeaders.Add("X-RapidAPI-Host", _judge0ApiHost);
                 }
 
-                (int ExitCode, string Stdout, string Stderr) runResult;
-                var stopwatch = Stopwatch.StartNew();
+                var jsonRequest = JsonSerializer.Serialize(createRequest);
+                var httpContent = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
 
-                if (useWarm) {
-                    _logger.LogInformation("Executing solution via warm sandbox container: {WarmContainerName}", warmContainerName);
-                    // Working directory path inside warm sandbox containers is /app/temp-runs/{executionId}
-                    var execArgs = $"exec -w /app/temp-runs/{executionId} {warmContainerName} sh -c \"{shellCmd}\"";
-                    runResult = await RunProcessAsync("docker", execArgs, 25000);
-                } else {
-                    _logger.LogInformation("Warm sandbox container {WarmContainerName} not running. Falling back to cold docker run", warmContainerName);
-                    // Volume path mounting
-                    var hostTempRuns = Environment.GetEnvironmentVariable("HOST_TEMP_RUNS_PATH");
-                    var hostPathForDocker = !string.IsNullOrEmpty(hostTempRuns)
-                        ? $"{hostTempRuns.Replace("\\", "/")}/{executionId}"
-                        : tempPath.Replace("\\", "/");
-                    var containerName = $"bitsmith-run-{executionId}";
+                var httpResponse = await client.PostAsync($"{_judge0ApiUrl}/submissions?base64_encoded=false&wait=false", httpContent);
 
-                    string extraDockerArgs = "";
-                    if (NormalizeLanguage(language) == "csharp") {
-                        extraDockerArgs = "-e DOTNET_CLI_TELEMETRY_OPTOUT=1 -e DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 -e DOTNET_NOLOGO=1 -e NUGET_XMLDOC_MODE=skip -v bitsmith-nuget-cache:/root/.nuget/packages";
-                    }
-
-                    // Run Docker command
-                    var args = $"run --rm --name {containerName} --network none --memory=\"512m\" --cpus=\"1.5\" --pids-limit=128 -v \"{hostPathForDocker}:/app\" {extraDockerArgs} -w /app {imageName} sh -c \"{shellCmd}\"";
-
-                    _logger.LogInformation("Launching cold Docker container: {ContainerName}", containerName);
-                    runResult = await RunProcessAsync("docker", args, 25000); // 25 seconds execution limit to allow for compilation + startup
-
-                    if (runResult.ExitCode == -2 || runResult.ExitCode == 124) {
-                        _logger.LogWarning("Docker execution timed out. ExitCode: {ExitCode}. Killing container {ContainerName}", runResult.ExitCode, containerName);
-                        CleanupContainer(containerName);
-                    }
-                }
-
-                stopwatch.Stop();
-                var timeMs = (int)stopwatch.ElapsedMilliseconds;
-
-                if (runResult.ExitCode == -2 || runResult.ExitCode == 124) {
-                    return new SandboxResult {
-                        Status = "Timeout",
-                        Error = "Time Limit Exceeded",
-                        ExecutionTimeMs = timeMs
-                    };
-                }
-
-                // Check compile error file
-                var compileErrPath = Path.Combine(tempPath, "compile_err.txt");
-                if (File.Exists(compileErrPath)) {
-                    var compileErr = await File.ReadAllTextAsync(compileErrPath);
-                    if (!string.IsNullOrWhiteSpace(compileErr)) {
-                        return new SandboxResult {
-                            Status = "CompileError",
-                            Error = compileErr,
-                            ExecutionTimeMs = timeMs
-                        };
-                    }
-                }
-
-                if (runResult.ExitCode != 0) {
+                if (!httpResponse.IsSuccessStatusCode) {
+                    var errorContent = await httpResponse.Content.ReadAsStringAsync();
+                    _logger.LogError("Judge0 failed to create submission. Status: {StatusCode}, Body: {ErrorBody}", httpResponse.StatusCode, errorContent);
                     return new SandboxResult {
                         Status = "RuntimeError",
-                        Error = runResult.Stderr,
-                        ExecutionTimeMs = timeMs
+                        Error = $"Failed to create submission with Judge0. Status: {httpResponse.StatusCode}"
                     };
                 }
 
-                return new SandboxResult {
-                    Status = "Success",
-                    Stdout = runResult.Stdout,
-                    ExecutionTimeMs = timeMs
-                };
-
-            } finally {
-                // Safely delete temp folder
-                try {
-                    if (Directory.Exists(tempPath)) {
-                        Directory.Delete(tempPath, true);
-                    }
-                } catch (Exception ex) {
-                    _logger.LogWarning(ex, "Failed to delete temp execution directory {TempPath}", tempPath);
+                var responseContent = await httpResponse.Content.ReadAsStringAsync();
+                var createResponse = JsonSerializer.Deserialize<Judge0CreateSubmissionResponse>(responseContent);
+                if (createResponse == null || string.IsNullOrEmpty(createResponse.Token)) {
+                    return new SandboxResult {
+                        Status = "RuntimeError",
+                        Error = "Judge0 returned an invalid token."
+                    };
                 }
+
+                var judgeToken = createResponse.Token;
+                _logger.LogInformation("Submission created on Judge0 with token {JudgeToken}", judgeToken);
+
+                Judge0GetSubmissionResponse? finalJudgeResponse = null;
+                int pollAttempts = 0;
+
+                while (true) {
+                    pollAttempts++;
+                    if (pollAttempts > 60) { // Failsafe: 45 seconds
+                        return new SandboxResult {
+                            Status = "Timeout",
+                            Error = "Polling Judge0 timed out."
+                        };
+                    }
+                    await Task.Delay(750);
+
+                    var getResponse = await client.GetAsync($"{_judge0ApiUrl}/submissions/{judgeToken}?base64_encoded=false");
+                    if (!getResponse.IsSuccessStatusCode) {
+                        return new SandboxResult {
+                            Status = "RuntimeError",
+                            Error = "Failed to poll for submission result from Judge0."
+                        };
+                    }
+
+                    var getResponseContent = await getResponse.Content.ReadAsStringAsync();
+                    finalJudgeResponse = JsonSerializer.Deserialize<Judge0GetSubmissionResponse>(getResponseContent);
+
+                    if (finalJudgeResponse == null) {
+                        return new SandboxResult {
+                            Status = "RuntimeError",
+                            Error = "Judge0 returned a null polling response."
+                        };
+                    }
+
+                    if (finalJudgeResponse.Status.Id > 2) {
+                        break;
+                    }
+                }
+
+                var result = new SandboxResult();
+                
+                if (double.TryParse(finalJudgeResponse.Time?.Replace("s", ""), out double timeInSeconds)) {
+                    result.ExecutionTimeMs = (int)(timeInSeconds * 1000);
+                }
+
+                if (finalJudgeResponse.Status.Id == 3 || finalJudgeResponse.Status.Id == 4) {
+                    result.Status = "Success";
+                    result.Stdout = finalJudgeResponse.StandardOutput;
+                } else if (finalJudgeResponse.Status.Id == 5) {
+                    result.Status = "Timeout";
+                    result.Error = "Time Limit Exceeded";
+                } else if (finalJudgeResponse.Status.Id == 6) {
+                    result.Status = "CompileError";
+                    result.Error = finalJudgeResponse.CompileOutput ?? finalJudgeResponse.StandardError;
+                } else {
+                    result.Status = "RuntimeError";
+                    result.Error = finalJudgeResponse.StandardError ?? finalJudgeResponse.CompileOutput ?? finalJudgeResponse.Status.Description;
+                }
+
+                return result;
+
+            } catch (Exception ex) {
+                _logger.LogError(ex, "Error executing code via Judge0");
+                return new SandboxResult {
+                    Status = "RuntimeError",
+                    Error = ex.Message
+                };
+            }
+        }
+
+        private static int GetLanguageId(string language) {
+            switch (NormalizeLanguage(language)) {
+                case "python":
+                    return 71;
+                case "cpp":
+                    return 54;
+                case "c":
+                    return 50;
+                case "java":
+                    return 62;
+                case "csharp":
+                    return 51;
+                default:
+                    throw new NotSupportedException($"Language '{language}' is not supported.");
             }
         }
 
