@@ -234,7 +234,7 @@
       <label class="field">
         <span class="field__label">Method Signature Metadata <span class="field__required">*</span></span>
         <span class="field__hint">Specify the JSON metadata so the system can generate the execution wrapper. Example: <code>&#123;"name":"solve","params":[&#123;"type":"integer[]"&#125;],"return":&#123;"type":"integer"&#125;&#125;</code></span>
-        <textarea class="input textarea textarea--mono textarea--code" formControlName="metaDataJson" rows="12" placeholder='&#123;&#10;  "name": "solve",&#10;  "params": [&#123;"type": "integer[]"&#125;],&#10;  "return": &#123;"type": "integer"&#125;&#10;&#125;'></textarea>
+        <textarea class="input textarea textarea--mono textarea--code" formControlName="metaDataJson" rows="12" (keydown)="onCodeKeyDown($event)" placeholder='&#123;&#10;  "name": "solve",&#10;  "params": [&#123;"type": "integer[]"&#125;],&#10;  "return": &#123;"type": "integer"&#125;&#10;&#125;'></textarea>
       </label>
 
       <div class="field">
@@ -258,19 +258,19 @@
         <!-- Textarea container with formGroupName -->
         <div formGroupName="starterCode" class="starter-code-editor">
           @if (activeStarterLang() === 'csharp') {
-            <textarea class="input textarea textarea--mono textarea--code" formControlName="csharp" rows="8" placeholder="public class Solution&#10;{&#10;    public void Solve()&#10;    {&#10;        &#10;    }&#10;}"></textarea>
+            <textarea class="input textarea textarea--mono textarea--code" formControlName="csharp" rows="8" (keydown)="onCodeKeyDown($event)" placeholder="public class Solution&#10;{&#10;    public void Solve()&#10;    {&#10;        &#10;    }&#10;}"></textarea>
           }
           @if (activeStarterLang() === 'python') {
-            <textarea class="input textarea textarea--mono textarea--code" formControlName="python" rows="8" placeholder="class Solution:&#10;    def solve(self):&#10;        pass"></textarea>
+            <textarea class="input textarea textarea--mono textarea--code" formControlName="python" rows="8" (keydown)="onCodeKeyDown($event)" placeholder="class Solution:&#10;    def solve(self):&#10;        pass"></textarea>
           }
           @if (activeStarterLang() === 'java') {
-            <textarea class="input textarea textarea--mono textarea--code" formControlName="java" rows="8" placeholder="class Solution {&#10;    public void solve() {&#10;        &#10;    }&#10;}"></textarea>
+            <textarea class="input textarea textarea--mono textarea--code" formControlName="java" rows="8" (keydown)="onCodeKeyDown($event)" placeholder="class Solution {&#10;    public void solve() {&#10;        &#10;    }&#10;}"></textarea>
           }
           @if (activeStarterLang() === 'cpp') {
-            <textarea class="input textarea textarea--mono textarea--code" formControlName="cpp" rows="8" placeholder="#include &lt;bits/stdc++.h&gt;&#10;using namespace std;&#10;&#10;class Solution {&#10;public:&#10;    void solve() {&#10;        &#10;    }&#10;};"></textarea>
+            <textarea class="input textarea textarea--mono textarea--code" formControlName="cpp" rows="8" (keydown)="onCodeKeyDown($event)" placeholder="#include &lt;bits/stdc++.h&gt;&#10;using namespace std;&#10;&#10;class Solution {&#10;public:&#10;    void solve() {&#10;        &#10;    }&#10;};"></textarea>
           }
           @if (activeStarterLang() === 'c') {
-            <textarea class="input textarea textarea--mono textarea--code" formControlName="c" rows="8" placeholder="#include &lt;stdio.h&gt;&#10;&#10;void solve(void) {&#10;    &#10;}"></textarea>
+            <textarea class="input textarea textarea--mono textarea--code" formControlName="c" rows="8" (keydown)="onCodeKeyDown($event)" placeholder="#include &lt;stdio.h&gt;&#10;&#10;void solve(void) {&#10;    &#10;}"></textarea>
           }
         </div>
       </div>
@@ -348,11 +348,11 @@
             <div class="testcase-card__fields" style="grid-template-columns: 1fr 1fr;">
               <label class="field">
                 <span class="field__label">Raw Input</span>
-                <textarea class="input textarea textarea--mono textarea--small" formControlName="input" rows="3" placeholder="[2,7,11,15]&#10;9"></textarea>
+                <textarea class="input textarea textarea--mono textarea--small" formControlName="input" rows="3" (keydown)="onCodeKeyDown($event)" placeholder="[2,7,11,15]&#10;9"></textarea>
               </label>
               <label class="field">
                 <span class="field__label">Expected Output</span>
-                <textarea class="input textarea textarea--mono textarea--small" formControlName="expectedOutput" rows="3" placeholder="[0,1]"></textarea>
+                <textarea class="input textarea textarea--mono textarea--small" formControlName="expectedOutput" rows="3" (keydown)="onCodeKeyDown($event)" placeholder="[0,1]"></textarea>
               </label>
             </div>
           </div>
@@ -387,11 +387,11 @@
             <div class="testcase-card__fields" style="grid-template-columns: 1fr 1fr;">
               <label class="field">
                 <span class="field__label">Raw Input</span>
-                <textarea class="input textarea textarea--mono textarea--small" formControlName="input" rows="3" placeholder="[3,2,4]&#10;6"></textarea>
+                <textarea class="input textarea textarea--mono textarea--small" formControlName="input" rows="3" (keydown)="onCodeKeyDown($event)" placeholder="[3,2,4]&#10;6"></textarea>
               </label>
               <label class="field">
                 <span class="field__label">Expected Output</span>
-                <textarea class="input textarea textarea--mono textarea--small" formControlName="expectedOutput" rows="3" placeholder="[1,2]"></textarea>
+                <textarea class="input textarea textarea--mono textarea--small" formControlName="expectedOutput" rows="3" (keydown)="onCodeKeyDown($event)" placeholder="[1,2]"></textarea>
               </label>
             </div>
           </div>

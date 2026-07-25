@@ -294,7 +294,33 @@ export class AdminPanelComponent implements OnInit {
     });
   }
 
+  onCodeKeyDown(event: KeyboardEvent) {
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      const target = event.target as HTMLTextAreaElement;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const value = target.value;
+      const indent = '    ';
+
+      if (event.shiftKey) {
+        if (start === end && value.substring(start - 4, start) === indent) {
+          target.value = value.substring(0, start - 4) + value.substring(end);
+          target.selectionStart = target.selectionEnd = start - 4;
+        }
+      } else {
+        target.value = value.substring(0, start) + indent + value.substring(end);
+        target.selectionStart = target.selectionEnd = start + indent.length;
+      }
+      target.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+
   onDescriptionKeyDown(event: KeyboardEvent) {
+    if (event.key === 'Tab') {
+      this.onCodeKeyDown(event);
+      return;
+    }
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const modifier = isMac ? event.metaKey : event.ctrlKey;
     if (modifier) {
