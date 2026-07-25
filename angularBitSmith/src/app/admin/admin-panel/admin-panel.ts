@@ -432,16 +432,23 @@ export class AdminPanelComponent implements OnInit {
     }
 
     const val = this.problemForm.getRawValue();
-    const metaJson = val.metaDataJson?.trim();
+    let metaJson = val.metaDataJson?.trim();
     if (!metaJson) {
-      this.toastService.error('Method Signature Metadata is required.');
-      return;
-    }
-    try {
-      JSON.parse(metaJson);
-    } catch (e) {
-      this.toastService.error('Method Signature Metadata must be a valid JSON object.');
-      return;
+      const rawStarterCode = val.starterCode || {};
+      const code = rawStarterCode.python || rawStarterCode.csharp || rawStarterCode.java || rawStarterCode.cpp || rawStarterCode.c || '';
+      const labels = (val.sharedInputLabels || '')
+        .split('\n')
+        .map((l: string) => l.trim())
+        .filter((l: string) => l.length > 0);
+      const generated = this.inferMetadataFromCode(code, labels);
+      metaJson = JSON.stringify(generated);
+    } else {
+      try {
+        JSON.parse(metaJson);
+      } catch (e) {
+        this.toastService.error('Method Signature Metadata must be a valid JSON object.');
+        return;
+      }
     }
 
     this.isSubmitting.set(true);
@@ -587,6 +594,104 @@ export class AdminPanelComponent implements OnInit {
   goToProblem() {
     const id = this.createdProblemId();
     if (id) void this.router.navigate(['/problems', id]);
+  }
+
+  autoGenerateMetadata() {
+    const starterGroup = this.problemForm.get('starterCode') as FormGroup;
+    const codes = starterGroup?.value || {};
+    const code = codes.python || codes.csharp || codes.java || codes.cpp || codes.c || '';
+    const labels = (this.problemForm.get('sharedInputLabels')?.value || '')
+      .split('\n')
+      .map((l: string) => l.trim())
+      .filter((l: string) => l.length > 0);
+
+    const generated = this.inferMetadataFromCode(code, labels);
+    this.problemForm.patchValue({
+      metaDataJson: JSON.stringify(generated, null, 2)
+    });
+    this.toastService.success('Metadata JSON auto-generated from starter code!');
+  }
+
+  private inferMetadataFromCode(code: string, labels: string[]) {
+    let methodName = 'solve';
+    let returnType = 'integer[]';
+    let params: { name: string; type: string }[] = [];
+
+    const pyMatch = code.match(/def\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)\s*(?:->\s*([^:]+))?:/);
+    if (pyMatch) {
+      methodName = pyMatch[1];
+      const rawParams = pyMatch[2].replace(/\bself\b,?\s*/, '').trim();
+      const rawReturn = pyMatch[3] ? pyMatch[3].trim() : '';
+
+      if (rawReturn) {
+        returnType = this.mapTypeToMeta(rawReturn);
+      }
+
+      if (rawParams) {
+        const paramPairs = rawParams.split(',');
+        params = paramPairs.map((p, idx) => {
+          const parts = p.split(':');
+          const pName = parts[0].trim() || labels[idx] || `param${idx + 1}`;
+          const pType = parts[1] ? this.mapTypeToMeta(parts[1].trim()) : 'integer';
+          return { name: pName, type: pType };
+        });
+      }
+    } else {
+      const cLikeMatch = code.match(/(?:public|private|protected|static|\s)*([\w<>[\]]+)\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)/);
+      if (cLikeMatch && cLikeMatch[2] !== 'class' && cLikeMatch[2] !== 'Solution') {
+        returnType = this.mapTypeToMeta(cLikeMatch[1]);
+        methodName = cLikeMatch[2];
+        const rawParams = cLikeMatch[3].trim();
+        if (rawParams) {
+          const paramPairs = rawParams.split(',');
+          params = paramPairs.map((p, idx) => {
+            const tokens = p.trim().split(/\s+/);
+            let pType = 'integer';
+            let pName = labels[idx] || `param${idx + 1}`;
+            if (tokens.length >= 2) {
+              pType = this.mapTypeToMeta(tokens[0]);
+              pName = tokens[1].replace(/[&*]/g, '');
+            } else if (tokens.length === 1) {
+              pType = this.mapTypeToMeta(tokens[0]);
+            }
+            return { name: pName, type: pType };
+          });
+        }
+      }
+    }
+
+    if (params.length === 0 && labels.length > 0) {
+      params = labels.map(label => ({ name: label, type: 'integer[]' }));
+    } else if (params.length === 0) {
+      params = [{ name: 'nums', type: 'integer[]' }];
+    }
+
+    return {
+      name: methodName,
+      params: params,
+      return: { type: returnType }
+    };
+  }
+
+  private mapTypeToMeta(typeStr: string): string {
+    const typeLower = typeStr.toLowerCase();
+    const isDoubleArray = typeLower.includes('[][]') || typeLower.includes('list<list') || typeLower.includes('vector<vector');
+    const isArray = isDoubleArray || typeStr.includes('[') || typeLower.includes('vector') || typeLower.includes('list');
+
+    const clean = typeStr.replace(/vector<|List<|list<|>|&|\*|\[|\]/g, '').trim().toLowerCase();
+    
+    let base = 'integer';
+    if (clean.includes('string') || clean.includes('str')) base = 'string';
+    else if (clean.includes('double') || clean.includes('float')) base = 'double';
+    else if (clean.includes('long')) base = 'long';
+    else if (clean.includes('bool')) base = 'boolean';
+    else if (clean.includes('char')) base = 'character';
+    else if (clean.includes('listnode')) base = 'ListNode';
+    else if (clean.includes('treenode')) base = 'TreeNode';
+
+    if (isDoubleArray) return `${base}[][]`;
+    if (isArray) return `${base}[]`;
+    return base;
   }
 
   createAnother() {

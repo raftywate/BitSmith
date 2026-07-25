@@ -613,6 +613,46 @@ namespace dotnetBitSmith.Services {
             } catch { }
         }
 
+        private static string NormalizeMetaType(string? rawType) {
+            if (string.IsNullOrWhiteSpace(rawType)) return "integer";
+            string t = rawType.Trim();
+
+            if (t.StartsWith("list<list<", StringComparison.OrdinalIgnoreCase) && t.EndsWith(">>")) {
+                string inner = t.Substring(10, t.Length - 12).Trim();
+                return NormalizeMetaType(inner) + "[][]";
+            }
+
+            if (t.StartsWith("list<", StringComparison.OrdinalIgnoreCase) && t.EndsWith(">")) {
+                string inner = t.Substring(5, t.Length - 6).Trim();
+                return NormalizeMetaType(inner) + "[]";
+            }
+            if (t.StartsWith("List<", StringComparison.OrdinalIgnoreCase) && t.EndsWith(">")) {
+                string inner = t.Substring(5, t.Length - 6).Trim();
+                return NormalizeMetaType(inner) + "[]";
+            }
+            if (t.StartsWith("vector<", StringComparison.OrdinalIgnoreCase) && t.EndsWith(">")) {
+                string inner = t.Substring(7, t.Length - 8).Trim();
+                return NormalizeMetaType(inner) + "[]";
+            }
+
+            switch (t.ToLower()) {
+                case "int":
+                case "integer": return "integer";
+                case "long": return "long";
+                case "double": return "double";
+                case "float": return "float";
+                case "bool":
+                case "boolean": return "boolean";
+                case "char":
+                case "character": return "character";
+                case "string":
+                case "str": return "string";
+                case "listnode": return "ListNode";
+                case "treenode": return "TreeNode";
+                default: return t;
+            }
+        }
+
         private static readonly SemaphoreSlim _metadataSemaphore = new SemaphoreSlim(1, 1);
 
         private async Task<(string MethodName, List<string> ParamTypes, string ReturnType)?> GetProblemMetadataAsync(string problemTitle) {
@@ -647,7 +687,7 @@ namespace dotnetBitSmith.Services {
                                 }
                             }
                         }
-                        return (name, paramTypes, returnType);
+                        return (name, paramTypes.Select(NormalizeMetaType).ToList(), NormalizeMetaType(returnType));
                     }
                 }
 
@@ -681,7 +721,7 @@ namespace dotnetBitSmith.Services {
                                     }
                                 }
                             }
-                            return (name, paramTypes, returnType);
+                            return (name, paramTypes.Select(NormalizeMetaType).ToList(), NormalizeMetaType(returnType));
                         }
                     }
                 }
@@ -694,6 +734,9 @@ namespace dotnetBitSmith.Services {
         }
 
         private static string WrapCode(string language, string userCode, string methodName, List<string> paramTypes, string returnType) {
+            paramTypes = paramTypes.Select(NormalizeMetaType).ToList();
+            returnType = NormalizeMetaType(returnType);
+
             switch (NormalizeLanguage(language)) {
                 case "cpp":
                     return WrapCpp(userCode, methodName, paramTypes, returnType);
