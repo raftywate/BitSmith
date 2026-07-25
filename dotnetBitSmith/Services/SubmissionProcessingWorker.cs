@@ -1,9 +1,11 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using dotnetBitSmith.Data;
 using dotnetBitSmith.Entities.Enums;
 using dotnetBitSmith.Interfaces;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -25,6 +27,26 @@ namespace dotnetBitSmith.Services {
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
             _logger.LogInformation("SubmissionProcessingWorker is starting...");
+
+            try {
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                var orphaned = await context.Submissions
+                    .Where(s => s.Status == SubmissionStatus.Running || s.Status == SubmissionStatus.Pending)
+                    .ToListAsync(stoppingToken);
+
+                if (orphaned.Count > 0) {
+                    _logger.LogInformation("Found {Count} orphaned submissions stuck in Pending/Running. Re-queuing...", orphaned.Count);
+                    foreach (var sub in orphaned) {
+                        sub.Status = SubmissionStatus.Pending;
+                        context.Submissions.Update(sub);
+                        await context.SaveChangesAsync(stoppingToken);
+                        _queue.EnqueueSubmission(sub.Id);
+                    }
+                }
+            } catch (Exception ex) {
+                _logger.LogError(ex, "Error checking or re-queuing orphaned submissions on worker startup.");
+            }
 
             while (!stoppingToken.IsCancellationRequested) {
                 try {
