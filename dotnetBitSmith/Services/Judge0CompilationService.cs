@@ -130,11 +130,11 @@ namespace dotnetBitSmith.Services {
                         var actualOutput = NormalizeOutput(actualOutputs[i], allowAnyOrder);
                         var expectedOutput = NormalizeOutput(testCases[i].ExpectedOutput, allowAnyOrder);
 
-                        if (!string.Equals(actualOutput, expectedOutput, StringComparison.Ordinal)) {
+                        if (!IsOutputMatching(actualOutputs[i], testCases[i].ExpectedOutput, allowAnyOrder, problem?.Title ?? "", testCases[i].Input)) {
                             finalStatus = SubmissionStatus.WrongAnswer;
                             submission.FailedTestCaseInput = testCases[i].Input;
                             submission.FailedTestCaseExpected = testCases[i].ExpectedOutput;
-                            submission.FailedTestCaseActual = actualOutputs[i];
+                            submission.FailedTestCaseActual = actualOutput;
                             _logger.LogInformation("Wrong Answer on TestCase {TestCaseId}. Expected: '{Expected}', Actual: '{Actual}'", testCases[i].Id, expectedOutput, actualOutput);
                             break;
                         }
@@ -181,9 +181,8 @@ namespace dotnetBitSmith.Services {
 
             var result = await ExecuteInSandboxAsync(language, wrappedCode, testCase.Input);
             var actualOutput = NormalizeOutput(result.Stdout ?? string.Empty, allowAnyOrder);
-            var expectedOutput = NormalizeOutput(testCase.ExpectedOutput, allowAnyOrder);
 
-            var isPassed = result.Status == "Success" && string.Equals(actualOutput, expectedOutput, StringComparison.Ordinal);
+            var isPassed = result.Status == "Success" && IsOutputMatching(result.Stdout ?? string.Empty, testCase.ExpectedOutput, allowAnyOrder, problemTitle, testCase.Input);
 
             return new SampleRunResultModel {
                 TestCaseId = testCase.Id,
@@ -230,7 +229,6 @@ namespace dotnetBitSmith.Services {
             var runResults = new List<SampleRunResultModel>();
             for (int i = 0; i < testCases.Count; i++) {
                 var tc = testCases[i];
-                var expectedOutput = NormalizeOutput(tc.ExpectedOutput, allowAnyOrder);
                 string actualOutput = "";
                 bool isPassed = false;
                 string status = result.Status;
@@ -238,7 +236,7 @@ namespace dotnetBitSmith.Services {
                 if (result.Status == "Success") {
                     if (i < actualOutputs.Count) {
                         actualOutput = NormalizeOutput(actualOutputs[i], allowAnyOrder);
-                        isPassed = string.Equals(actualOutput, expectedOutput, StringComparison.Ordinal);
+                        isPassed = IsOutputMatching(actualOutputs[i], tc.ExpectedOutput, allowAnyOrder, problemTitle, tc.Input);
                         status = isPassed ? "Accepted" : "Wrong Answer";
                     } else {
                         status = "Wrong Answer";
@@ -2140,8 +2138,56 @@ void print_tree_node(struct TreeNode* root) {
             return sb.ToString();
         }
 
+        private static bool IsOutputMatching(string actualRaw, string expectedRaw, bool allowAnyOrder, string problemTitle = "", string inputRaw = "") {
+            if (actualRaw == null) actualRaw = string.Empty;
+            if (expectedRaw == null) expectedRaw = string.Empty;
+
+            var actualNorm = NormalizeOutput(actualRaw, allowAnyOrder);
+            var expectedNorm = NormalizeOutput(expectedRaw, allowAnyOrder);
+
+            if (string.Equals(actualNorm, expectedNorm, StringComparison.Ordinal)) {
+                return true;
+            }
+
+            if (expectedRaw.Contains("|")) {
+                var candidates = expectedRaw.Split(new[] { "||", "|" }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var candidate in candidates) {
+                    var candidateNorm = NormalizeOutput(candidate, allowAnyOrder);
+                    if (string.Equals(actualNorm, candidateNorm, StringComparison.Ordinal)) {
+                        return true;
+                    }
+                }
+            }
+
+            if (!string.IsNullOrEmpty(problemTitle) && problemTitle.Contains("Longest Palindromic Substring", StringComparison.OrdinalIgnoreCase)) {
+                var cleanInput = NormalizeOutput(inputRaw, false);
+                if (cleanInput.StartsWith("\"") && cleanInput.EndsWith("\"") && cleanInput.Length >= 2) {
+                    cleanInput = cleanInput.Substring(1, cleanInput.Length - 2);
+                }
+
+                if (actualNorm.Length == expectedNorm.Length && actualNorm.Length > 0) {
+                    bool isPalindrome = true;
+                    for (int l = 0, r = actualNorm.Length - 1; l < r; l++, r--) {
+                        if (actualNorm[l] != actualNorm[r]) { isPalindrome = false; break; }
+                    }
+
+                    if (isPalindrome && cleanInput.Contains(actualNorm)) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
         private static string NormalizeOutput(string output, bool allowAnyOrder) {
+            if (string.IsNullOrWhiteSpace(output)) return string.Empty;
             output = output.Trim();
+
+            if (output.Length >= 2 && output.StartsWith("\"") && output.EndsWith("\"")) {
+                output = output.Substring(1, output.Length - 2).Replace("\\\"", "\"").Trim();
+            }
+
             if (output.StartsWith("[") && output.EndsWith("]")) {
                 try {
                     var content = output.Substring(1, output.Length - 2);
@@ -2155,15 +2201,20 @@ void print_tree_node(struct TreeNode* root) {
                     var parsedInts = new List<int>();
                     
                     foreach (var p in parts) {
-                        if (int.TryParse(p, out int iVal)) {
+                        var elem = p;
+                        if (elem.Length >= 2 && elem.StartsWith("\"") && elem.EndsWith("\"")) {
+                            elem = elem.Substring(1, elem.Length - 2).Replace("\\\"", "\"").Trim();
+                        }
+
+                        if (int.TryParse(elem, out int iVal)) {
                             parsedInts.Add(iVal);
                             normalizedParts.Add(iVal.ToString(System.Globalization.CultureInfo.InvariantCulture));
                         } else {
                             allInts = false;
-                            if (double.TryParse(p, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double dVal)) {
+                            if (double.TryParse(elem, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double dVal)) {
                                 normalizedParts.Add(dVal.ToString("G17", System.Globalization.CultureInfo.InvariantCulture));
                             } else {
-                                normalizedParts.Add(p);
+                                normalizedParts.Add(elem);
                             }
                         }
                     }
