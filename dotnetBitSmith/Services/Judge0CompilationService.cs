@@ -287,6 +287,7 @@ namespace dotnetBitSmith.Services {
                 }
 
                 _logger.LogWarning("Falling back to Judge0 because the Docker C++ sandbox is unavailable.");
+                _useDockerForCpp = false;
             }
 
             _logger.LogInformation("Sending execution request to Judge0...");
