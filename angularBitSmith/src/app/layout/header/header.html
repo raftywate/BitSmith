@@ -21,7 +21,7 @@
                    [queryParams]="prevProblemQueryParams"
                    class="nav-arrow"
                    [class.nav-arrow--disabled]="!prevProblemId"
-                   [attr.title]="prevProblemId ? 'Clicking on it will take to the prev problem' : 'No previous problem'">
+                   [attr.title]="prevProblemId ? 'Previous problem' : 'No previous problem'">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="15 18 9 12 15 6"></polyline>
                     </svg>
@@ -30,7 +30,7 @@
                    [queryParams]="nextProblemQueryParams"
                    class="nav-arrow"
                    [class.nav-arrow--disabled]="!nextProblemId"
-                   [attr.title]="nextProblemId ? 'Clicking on it will take to the next problem' : 'No next problem'">
+                   [attr.title]="nextProblemId ? 'Next problem' : 'No next problem'">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
@@ -44,13 +44,13 @@
             <div class="workspace-header-actions">
                 <button type="button" class="btn btn--ghost btn--small"
                     (click)="workspaceActionService.requestRunSamples()"
-                    [disabled]="workspaceActionService.isRunningSamples()"
+                    [disabled]="workspaceActionService.isRunningSamples() || workspaceActionService.isSubmitting()"
                     title="Ctrl + '">
                     {{ workspaceActionService.isRunningSamples() ? 'Running...' : 'Run' }}
                 </button>
                 <button type="button" class="btn btn--primary btn--small"
                     (click)="workspaceActionService.requestSubmit()"
-                    [disabled]="workspaceActionService.isSubmitting()"
+                    [disabled]="workspaceActionService.isSubmitting() || workspaceActionService.isRunningSamples()"
                     title="Ctrl + Enter">
                     {{ workspaceActionService.isSubmitting() ? 'Submitting...' : 'Submit' }}
                 </button>

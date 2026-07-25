@@ -680,15 +680,29 @@
         </div>
       </div>
 
-      @if (!problemModel.sampleTestCases.length) {
+      @if (!problemModel.sampleTestCases.length && problemModel.sampleTestCases.length === 0) {
       <div class="empty-state">No visible sample test cases are configured for this problem yet.</div>
       } @else {
       <div class="sample-runner">
-        <div class="sample-runner__tabs">
+        <div class="sample-runner__tabs" style="display: flex; align-items: center;">
           @for (testCase of problemModel.sampleTestCases; track testCase.id; let index = $index) {
           <button type="button" class="sample-runner__tab" [class.sample-runner__tab--active]="selectedSampleIndex() === index"
             (click)="setSampleIndex(index)">
             Case {{ index + 1 }}
+            @if (testCase.isCustom) {
+            <span class="sample-runner__tab-delete" (click)="deleteCustomTestCase(index); $event.stopPropagation()" title="Delete Case">
+              <svg xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 -960 960 960" width="14px" fill="currentColor">
+                <path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v500h400v-500ZM360-320h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v500-500Z"/>
+              </svg>
+            </span>
+            }
+          </button>
+          }
+          @if (problemModel.sampleTestCases.length < 8) {
+          <button type="button" class="sample-runner__tab sample-runner__tab--add" (click)="addCustomTestCase()" title="Add Custom Test Case" style="padding: 0.55rem; border-style: dashed; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;">
+            <svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor">
+              <path d="M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z"/>
+            </svg>
           </button>
           }
         </div>
@@ -698,6 +712,7 @@
           <article>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
               <span style="font-weight: 700; color: var(--text-strong);">Input</span>
+              @if (!testCase.isCustom) {
               <button type="button" class="btn-copy" (click)="copyToClipboard(testCase.input, $event)" title="Copy Input">
                 <svg class="icon-copy" xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" fill="currentColor">
                   <path d="M360-240q-29.7 0-50.85-21.15Q288-282.3 288-312v-480q0-29.7 21.15-50.85Q330.3-864 360-864h360q29.7 0 50.85 21.15Q792-821.7 792-792v480q0-29.7-21.15-50.85Q749.7-240 720-240H360Zm0-72h360v-480H360v480ZM216-96q-29.7 0-50.85-21.15Q144-138.3 144-168v-528h72v528h432v72H216Zm144-288v-480 480Z"/>
@@ -706,7 +721,9 @@
                   <path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
                 </svg>
               </button>
+              }
             </div>
+            @if (!testCase.isCustom) {
             <div class="sample-runner__input-list">
               @for (part of inputParts(testCase); track $index) {
               <div class="sample-runner__input-item">
@@ -715,6 +732,36 @@
               </div>
               }
             </div>
+            } @else {
+            <div class="sample-runner__input-list">
+              @for (part of inputParts(testCase); track $index) {
+              <div class="sample-runner__input-item" style="display: flex; flex-direction: column; gap: 0.25rem;">
+                <span style="font-size: 0.8rem; color: var(--text-muted);">{{ part.label }}</span>
+                <input type="text" class="custom-testcase-input" [value]="part.value" (input)="updateCustomTestCaseInput(selectedSampleIndex(), $index, $event)">
+              </div>
+              }
+            </div>
+            }
+          </article>
+          <article>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-weight: 700; color: var(--text-strong);">Expected output</span>
+              @if (!testCase.isCustom) {
+              <button type="button" class="btn-copy" (click)="copyToClipboard(testCase.expectedOutput, $event)" title="Copy Expected Output">
+                <svg class="icon-copy" xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" fill="currentColor">
+                  <path d="M360-240q-29.7 0-50.85-21.15Q288-282.3 288-312v-480q0-29.7 21.15-50.85Q330.3-864 360-864h360q29.7 0 50.85 21.15Q792-821.7 792-792v480q0-29.7-21.15-50.85Q749.7-240 720-240H360Zm0-72h360v-480H360v480ZM216-96q-29.7 0-50.85-21.15Q144-138.3 144-168v-528h72v528h432v72H216Zm144-288v-480 480Z"/>
+                </svg>
+                <svg class="icon-check" xmlns="http://www.w3.org/2000/svg" height="15px" viewBox="0 -960 960 960" width="15px" fill="currentColor">
+                  <path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
+                </svg>
+              </button>
+              }
+            </div>
+            @if (!testCase.isCustom) {
+            <pre>{{ testCase.expectedOutput }}</pre>
+            } @else {
+            <textarea class="custom-testcase-expected" placeholder="Enter expected output..." [value]="testCase.expectedOutput" (input)="updateCustomTestCaseExpected(selectedSampleIndex(), $event)"></textarea>
+            }
           </article>
         </div>
         }

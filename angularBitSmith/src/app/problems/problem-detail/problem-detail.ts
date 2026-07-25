@@ -614,6 +614,7 @@ export class ProblemDetailComponent implements OnDestroy {
           if (storedCustom) {
             try {
               const customCases: SampleTestCase[] = JSON.parse(storedCustom);
+              customCases.forEach(tc => tc.isCustom = true);
               problem.sampleTestCases = [...problem.sampleTestCases, ...customCases];
             } catch (e) {
               console.error('Failed to parse custom test cases', e);
@@ -715,7 +716,8 @@ export class ProblemDetailComponent implements OnDestroy {
       .runSampleTests({
         problemId: problem.id,
         language: this.editorLanguage(),
-        code: this.code()
+        code: this.code(),
+        testCases: problem.sampleTestCases
       })
       .subscribe({
         next: results => {
@@ -736,9 +738,25 @@ export class ProblemDetailComponent implements OnDestroy {
     this.code.set(this.getStarterCode());
   }
 
+  private generateGuid(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
   addFailedTestCaseToRunner(input: string, expected: string) {
     const currentProblem = this.problem();
     if (!currentProblem) return;
+
+    if (currentProblem.sampleTestCases.length >= 8) {
+      this.toastService.warning('You can have at most 8 test cases in total. Please remove some custom test cases first.');
+      return;
+    }
 
     const exists = currentProblem.sampleTestCases.some(tc => tc.input === input);
     if (exists) {
@@ -746,12 +764,16 @@ export class ProblemDetailComponent implements OnDestroy {
       return;
     }
 
+    const firstTestCase = currentProblem.sampleTestCases[0];
+    const inputLabels = firstTestCase ? [...(firstTestCase.inputLabels ?? [])] : [];
+
     const newTestCase: SampleTestCase = {
-      id: `custom_${Date.now()}`,
+      id: this.generateGuid(),
       input,
-      inputLabels: [],
+      inputLabels,
       isHidden: false,
-      expectedOutput: expected
+      expectedOutput: expected,
+      isCustom: true
     };
 
     if (typeof localStorage !== 'undefined') {
@@ -781,6 +803,114 @@ export class ProblemDetailComponent implements OnDestroy {
         sampleTestCases: updatedTestCases
       };
     });
+  }
+
+  addCustomTestCase() {
+    const currentProblem = this.problem();
+    if (!currentProblem) return;
+
+    if (currentProblem.sampleTestCases.length >= 8) {
+      this.toastService.warning('You can have at most 8 test cases in total.');
+      return;
+    }
+
+    const firstTestCase = currentProblem.sampleTestCases[0];
+    const inputLabels = firstTestCase ? [...(firstTestCase.inputLabels ?? [])] : [];
+    const initialInput = inputLabels.length > 0 ? Array(inputLabels.length).fill('').join('\n') : '';
+
+    const newTestCase: SampleTestCase = {
+      id: this.generateGuid(),
+      input: initialInput,
+      inputLabels,
+      isHidden: false,
+      expectedOutput: '',
+      isCustom: true
+    };
+
+    this.problem.update(current => {
+      if (!current) return current;
+      const updatedTestCases = [...current.sampleTestCases, newTestCase];
+      
+      this.saveCustomTestCasesToStorage(current.id, updatedTestCases);
+      this.toastService.success('Custom test case added!');
+      
+      setTimeout(() => {
+        this.selectedSampleIndex.set(updatedTestCases.length - 1);
+      }, 50);
+
+      return {
+        ...current,
+        sampleTestCases: updatedTestCases
+      };
+    });
+  }
+
+  deleteCustomTestCase(caseIndex: number) {
+    this.problem.update(current => {
+      if (!current) return current;
+      const updatedCases = [...current.sampleTestCases];
+      updatedCases.splice(caseIndex, 1);
+      
+      this.saveCustomTestCasesToStorage(current.id, updatedCases);
+      
+      const newIndex = Math.max(0, caseIndex - 1);
+      this.selectedSampleIndex.set(newIndex);
+      
+      return {
+        ...current,
+        sampleTestCases: updatedCases
+      };
+    });
+    this.toastService.success('Custom test case removed.');
+  }
+
+  updateCustomTestCaseInput(caseIndex: number, inputIndex: number, event: Event) {
+    const value = (event.target as HTMLInputElement).value;
+    this.problem.update(current => {
+      if (!current) return current;
+      const updatedCases = [...current.sampleTestCases];
+      const tc = { ...updatedCases[caseIndex] };
+      
+      const parts = (tc.input ?? '').split(/\r?\n/);
+      while (parts.length <= inputIndex) {
+        parts.push('');
+      }
+      parts[inputIndex] = value;
+      tc.input = parts.join('\n');
+      
+      updatedCases[caseIndex] = tc;
+      
+      this.saveCustomTestCasesToStorage(current.id, updatedCases);
+      
+      return {
+        ...current,
+        sampleTestCases: updatedCases
+      };
+    });
+  }
+
+  updateCustomTestCaseExpected(caseIndex: number, event: Event) {
+    const value = (event.target as HTMLTextAreaElement).value;
+    this.problem.update(current => {
+      if (!current) return current;
+      const updatedCases = [...current.sampleTestCases];
+      const tc = { ...updatedCases[caseIndex], expectedOutput: value };
+      updatedCases[caseIndex] = tc;
+      
+      this.saveCustomTestCasesToStorage(current.id, updatedCases);
+      
+      return {
+        ...current,
+        sampleTestCases: updatedCases
+      };
+    });
+  }
+
+  private saveCustomTestCasesToStorage(problemId: string, allCases: SampleTestCase[]) {
+    if (typeof localStorage === 'undefined') return;
+    const customCases = allCases.filter(tc => tc.isCustom);
+    const key = this.getStorageKey('customTestCases', problemId);
+    localStorage.setItem(key, JSON.stringify(customCases));
   }
 
   updateCode(value: string) {

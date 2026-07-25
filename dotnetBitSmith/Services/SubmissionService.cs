@@ -112,12 +112,22 @@ namespace dotnetBitSmith.Services {
                 throw new NotFoundException("Problem with ID " + model.ProblemId + " not found.");
             }
 
-            var testCasesList = await _context.TestCases
-                .AsNoTracking()
-                .Where(testCase => testCase.ProblemId == model.ProblemId && !testCase.IsHidden)
-                .ToListAsync();
-                
-            var testCases = testCasesList.OrderBy(testCase => testCase.Id).ToList();
+            List<TestCase> testCases;
+            if (model.TestCases != null && model.TestCases.Any()) {
+                testCases = model.TestCases.Select(tc => new TestCase {
+                    Id = tc.Id,
+                    Input = tc.Input,
+                    ExpectedOutput = tc.ExpectedOutput,
+                    ProblemId = model.ProblemId,
+                    IsHidden = false
+                }).ToList();
+            } else {
+                var testCasesList = await _context.TestCases
+                    .AsNoTracking()
+                    .Where(testCase => testCase.ProblemId == model.ProblemId && !testCase.IsHidden)
+                    .ToListAsync();
+                testCases = testCasesList.OrderBy(testCase => testCase.Id).ToList();
+            }
 
             if (!testCases.Any()) {
                 return Enumerable.Empty<SampleRunResultModel>();

@@ -1,3 +1,5 @@
+import { SampleTestCase } from './problem-detail';
+
 export type SubmissionStatus =
   | 'Pending'
   | 'Running'
@@ -21,6 +23,7 @@ export interface SampleRunRequest {
   problemId: string;
   language: EditorLanguage;
   code: string;
+  testCases?: SampleTestCase[];
 }
 
 export interface SampleRunResult {

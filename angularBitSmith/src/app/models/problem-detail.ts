@@ -7,6 +7,7 @@ export interface SampleTestCase {
   expectedOutput: string;
   inputLabels: string[];
   isHidden?: boolean;
+  isCustom?: boolean;
 }
 
 export interface ProblemDetail {
