@@ -35,7 +35,7 @@ namespace dotnetBitSmith.Services {
             _context = context;
             _logger = logger;
             _httpClientFactory = httpClientFactory;
-            _judge0ApiUrl = configuration["Judge0Settings:ApiUrl"] ?? "http://localhost:2358";
+            _judge0ApiUrl = (configuration["Judge0Settings:ApiUrl"] ?? "http://localhost:2358").TrimEnd('/');
             _judge0ApiKey = configuration["Judge0Settings:ApiKey"] ?? "";
             _useDockerForCpp = configuration.GetValue("SandboxSettings:UseDockerForCpp", true);
             _cppSandboxContainer = configuration["SandboxSettings:CppContainerName"] ?? "bitsmith-sandbox-gcc";
@@ -310,7 +310,9 @@ namespace dotnetBitSmith.Services {
                 var jsonRequest = JsonSerializer.Serialize(createRequest);
                 var httpContent = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
 
-                var httpResponse = await client.PostAsync($"{_judge0ApiUrl}/submissions?base64_encoded=false&wait=false", httpContent);
+                var postUrl = $"{_judge0ApiUrl}/submissions?base64_encoded=false&wait=false";
+                _logger.LogInformation("Posting to Judge0 URL: {PostUrl}", postUrl);
+                var httpResponse = await client.PostAsync(postUrl, httpContent);
 
                 if (!httpResponse.IsSuccessStatusCode) {
                     var errorContent = await httpResponse.Content.ReadAsStringAsync();
@@ -350,7 +352,8 @@ namespace dotnetBitSmith.Services {
                     int pollHttpRetries = 0;
                     while (pollHttpRetries < 5) {
                         try {
-                            getResponse = await client.GetAsync($"{_judge0ApiUrl}/submissions/{judgeToken}?base64_encoded=false");
+                            var getUrl = $"{_judge0ApiUrl}/submissions/{judgeToken}?base64_encoded=false";
+                            getResponse = await client.GetAsync(getUrl);
                             if (getResponse.IsSuccessStatusCode) break;
                         } catch { }
                         pollHttpRetries++;
@@ -363,7 +366,7 @@ namespace dotnetBitSmith.Services {
                             judgeToken, getResponse?.StatusCode, errorBody);
                         return new SandboxResult {
                             Status = "RuntimeError",
-                            Error = $"Failed to poll for submission result from Judge0 (HTTP {getResponse?.StatusCode})."
+                            Error = $"Failed to poll for submission result from Judge0 (HTTP {getResponse?.StatusCode}). Detail: {errorBody?.Substring(0, Math.Min(200, errorBody?.Length ?? 0))}"
                         };
                     }
 
