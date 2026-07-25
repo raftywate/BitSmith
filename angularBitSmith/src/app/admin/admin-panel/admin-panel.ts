@@ -295,14 +295,15 @@ export class AdminPanelComponent implements OnInit {
   }
 
   onCodeKeyDown(event: KeyboardEvent) {
+    const target = event.target as HTMLTextAreaElement;
+    const start = target.selectionStart;
+    const end = target.selectionEnd;
+    const value = target.value;
+
+    // 1. TAB & SHIFT+TAB
     if (event.key === 'Tab') {
       event.preventDefault();
-      const target = event.target as HTMLTextAreaElement;
-      const start = target.selectionStart;
-      const end = target.selectionEnd;
-      const value = target.value;
       const indent = '    ';
-
       if (event.shiftKey) {
         if (start === end && value.substring(start - 4, start) === indent) {
           target.value = value.substring(0, start - 4) + value.substring(end);
@@ -313,6 +314,70 @@ export class AdminPanelComponent implements OnInit {
         target.selectionStart = target.selectionEnd = start + indent.length;
       }
       target.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
+
+    // 2. AUTO-INDENT ON ENTER KEY
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+      const currentLine = value.substring(lineStart, start);
+      const leadingMatch = currentLine.match(/^[ \t]*/);
+      let indent = leadingMatch ? leadingMatch[0] : '';
+      
+      const trimmedLine = currentLine.trimEnd();
+      const lastChar = trimmedLine.slice(-1);
+      if (['{', '[', '(', ':'].includes(lastChar)) {
+        indent += '    ';
+      }
+
+      const insertText = '\n' + indent;
+      target.value = value.substring(0, start) + insertText + value.substring(end);
+      target.selectionStart = target.selectionEnd = start + insertText.length;
+      target.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
+
+    // 3. AUTO-CLOSING PAIRS ({}, [], (), "", '')
+    const pairs: Record<string, string> = {
+      '{': '}',
+      '[': ']',
+      '(': ')',
+      '"': '"',
+      "'": "'"
+    };
+
+    if (pairs[event.key] && start === end) {
+      const closeChar = pairs[event.key];
+      if ((event.key === '"' || event.key === "'") && value[start] === event.key) {
+        event.preventDefault();
+        target.selectionStart = target.selectionEnd = start + 1;
+        return;
+      }
+      event.preventDefault();
+      target.value = value.substring(0, start) + event.key + closeChar + value.substring(end);
+      target.selectionStart = target.selectionEnd = start + 1;
+      target.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
+
+    // 4. BACKSPACE PAIR DELETE
+    if (event.key === 'Backspace' && start === end && start > 0) {
+      const prevChar = value[start - 1];
+      const nextChar = value[start];
+      if (
+        (prevChar === '{' && nextChar === '}') ||
+        (prevChar === '[' && nextChar === ']') ||
+        (prevChar === '(' && nextChar === ')') ||
+        (prevChar === '"' && nextChar === '"') ||
+        (prevChar === "'" && nextChar === "'")
+      ) {
+        event.preventDefault();
+        target.value = value.substring(0, start - 1) + value.substring(start + 1);
+        target.selectionStart = target.selectionEnd = start - 1;
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+      }
     }
   }
 
