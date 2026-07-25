@@ -19,7 +19,7 @@ namespace dotnetBitSmith.Services {
         private readonly string _judge0ApiUrl;
         private readonly string _judge0ApiKey;
         private readonly string _judge0ApiHost;
-        private readonly bool _useDockerForCpp;
+        private bool _useDockerForCpp;
         private readonly string _cppSandboxContainer;
         private readonly string _hostTempRunsPath;
         private readonly string _containerTempRunsPath;
