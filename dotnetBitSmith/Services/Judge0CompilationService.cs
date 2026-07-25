@@ -346,11 +346,24 @@ namespace dotnetBitSmith.Services {
                     }
                     await Task.Delay(750);
 
-                    var getResponse = await client.GetAsync($"{_judge0ApiUrl}/submissions/{judgeToken}?base64_encoded=false");
-                    if (!getResponse.IsSuccessStatusCode) {
+                    HttpResponseMessage? getResponse = null;
+                    int pollHttpRetries = 0;
+                    while (pollHttpRetries < 5) {
+                        try {
+                            getResponse = await client.GetAsync($"{_judge0ApiUrl}/submissions/{judgeToken}?base64_encoded=false");
+                            if (getResponse.IsSuccessStatusCode) break;
+                        } catch { }
+                        pollHttpRetries++;
+                        await Task.Delay(1000);
+                    }
+
+                    if (getResponse == null || !getResponse.IsSuccessStatusCode) {
+                        var errorBody = getResponse != null ? await getResponse.Content.ReadAsStringAsync() : "No response";
+                        _logger.LogError("Failed to poll submission {JudgeToken} from Judge0. Status: {StatusCode}, Body: {ErrorBody}",
+                            judgeToken, getResponse?.StatusCode, errorBody);
                         return new SandboxResult {
                             Status = "RuntimeError",
-                            Error = "Failed to poll for submission result from Judge0."
+                            Error = $"Failed to poll for submission result from Judge0 (HTTP {getResponse?.StatusCode})."
                         };
                     }
 

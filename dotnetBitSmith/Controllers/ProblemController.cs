@@ -303,6 +303,19 @@ namespace dotnetBitSmith.Controllers {
             }
         }
 
+        [HttpPost("seed-sample-testcases")]
+        public async Task<IActionResult> SeedSampleTestCases(
+            [FromServices] dotnetBitSmith.Data.ApplicationDbContext context,
+            [FromQuery] int limit = 225)
+        {
+            try {
+                var result = await TestCaseGenerator.SeedSampleTestCasesAsync(context, limit);
+                return Ok(new { message = result });
+            } catch (Exception ex) {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpPost("make-all-test-cases-visible")]
         public async Task<IActionResult> MakeAllTestCasesVisible() {
             try {

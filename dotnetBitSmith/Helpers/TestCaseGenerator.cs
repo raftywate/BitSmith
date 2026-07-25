@@ -514,6 +514,109 @@ namespace dotnetBitSmith.Helpers {
             return 0;
         }
 
+        /// <summary>
+        /// Seeds sample test cases from problems.json for problems that have 0 test cases.
+        /// Also sets MetaDataJson if it is null. Expected outputs are extracted from the
+        /// problem description HTML. Does NOT require fetching a Python solution.
+        /// </summary>
+        public static async Task<string> SeedSampleTestCasesAsync(
+            ApplicationDbContext context,
+            int maxProblemsToProcess = 50)
+        {
+            var jsonPath = Path.Combine(Directory.GetCurrentDirectory(), "problems.json");
+            if (!File.Exists(jsonPath)) return "Error: problems.json not found.";
+
+            var jsonString = await File.ReadAllTextAsync(jsonPath);
+            Dictionary<string, JsonElement> jsonLookup;
+            try {
+                using (var doc = JsonDocument.Parse(jsonString)) {
+                    var problemsArray = doc.RootElement.GetProperty("problems");
+                    jsonLookup = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var p in problemsArray.EnumerateArray()) {
+                        var title = p.GetProperty("title").GetString();
+                        if (title != null && !jsonLookup.ContainsKey(title))
+                            jsonLookup[title] = p.Clone();
+                    }
+                }
+            } catch (Exception ex) {
+                return $"Error parsing problems.json: {ex.Message}";
+            }
+
+            // Get problems with 0 test cases
+            var dbProblems = await context.Problems
+                .Include(p => p.TestCases)
+                .Where(p => p.TestCases.Count == 0)
+                .Take(maxProblemsToProcess)
+                .ToListAsync();
+
+            if (!dbProblems.Any()) return "All problems already have at least one test case.";
+
+            int seeded = 0;
+            int metaSet = 0;
+
+            foreach (var problem in dbProblems) {
+                if (!jsonLookup.TryGetValue(problem.Title, out var jsonProb)) continue;
+
+                // Set MetaDataJson if missing
+                if (string.IsNullOrWhiteSpace(problem.MetaDataJson)) {
+                    if (jsonProb.TryGetProperty("metaData", out var metaElem)) {
+                        problem.MetaDataJson = metaElem.GetRawText();
+                        metaSet++;
+                    }
+                }
+
+                // Get param count from metaData
+                int paramCount = 1;
+                if (jsonProb.TryGetProperty("metaData", out var meta) &&
+                    meta.TryGetProperty("params", out var paramsProp) &&
+                    paramsProp.ValueKind == JsonValueKind.Array) {
+                    paramCount = paramsProp.GetArrayLength();
+                    if (paramCount < 1) paramCount = 1;
+                }
+
+                // Get sample inputs from testCases array in problems.json
+                if (!jsonProb.TryGetProperty("testCases", out var tcArray) ||
+                    tcArray.ValueKind != JsonValueKind.Array) continue;
+
+                var sampleInputs = new List<string>();
+                for (int i = 0; i < tcArray.GetArrayLength(); i += paramCount) {
+                    var chunk = new List<string>();
+                    for (int j = 0; j < paramCount && (i + j) < tcArray.GetArrayLength(); j++) {
+                        var val = tcArray[i + j].ValueKind == JsonValueKind.String
+                            ? tcArray[i + j].GetString()
+                            : tcArray[i + j].GetRawText();
+                        chunk.Add(val ?? "");
+                    }
+                    sampleInputs.Add(string.Join("\n", chunk));
+                }
+
+                if (!sampleInputs.Any()) continue;
+
+                // Extract expected outputs from description HTML
+                var expectedOutputs = ExtractExpectedOutputs(problem.Description ?? "");
+
+                var newTestCases = new List<TestCase>();
+                for (int i = 0; i < sampleInputs.Count; i++) {
+                    var expected = (i < expectedOutputs.Count) ? expectedOutputs[i] : "";
+                    newTestCases.Add(new TestCase {
+                        Id = Guid.NewGuid(),
+                        Input = sampleInputs[i],
+                        ExpectedOutput = expected,
+                        IsHidden = false,
+                        ProblemId = problem.Id
+                    });
+                }
+
+                if (newTestCases.Any()) {
+                    context.TestCases.AddRange(newTestCases);
+                    seeded += newTestCases.Count;
+                }
+            }
+
+            await context.SaveChangesAsync();
+            return $"Success: Seeded {seeded} sample test cases for {dbProblems.Count} problems. Set metadata for {metaSet} problems.";
+        }
+
         private static List<string> ExtractExpectedOutputs(string htmlContent) {
             var outputs = new List<string>();
             if (string.IsNullOrWhiteSpace(htmlContent)) return outputs;
