@@ -41,7 +41,7 @@ namespace dotnetBitSmith.Services {
                         sub.Status = SubmissionStatus.Pending;
                         context.Submissions.Update(sub);
                         await context.SaveChangesAsync(stoppingToken);
-                        _queue.EnqueueSubmission(sub.Id);
+                        await _queue.QueueSubmissionAsync(sub.Id);
                     }
                 }
             } catch (Exception ex) {
