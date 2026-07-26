@@ -294,10 +294,12 @@ namespace dotnetBitSmith.Services {
             try {
                 int languageId = GetLanguageId(language);
                 
+                // Always use base64_encoded=true to avoid '400 cannot convert to UTF-8'
+                // that occurs when output contains non-UTF-8 bytes (e.g. C/C++ compiled output)
                 var createRequest = new Judge0CreateSubmissionRequest {
                     LanguageId = languageId,
-                    SourceCode = wrappedCode,
-                    StandardInputs = stdin
+                    SourceCode = Convert.ToBase64String(Encoding.UTF8.GetBytes(wrappedCode)),
+                    StandardInputs = string.IsNullOrEmpty(stdin) ? null : Convert.ToBase64String(Encoding.UTF8.GetBytes(stdin))
                 };
 
                 var client = _httpClientFactory.CreateClient();
@@ -310,7 +312,7 @@ namespace dotnetBitSmith.Services {
                 var jsonRequest = JsonSerializer.Serialize(createRequest);
                 var httpContent = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
 
-                var postUrl = $"{_judge0ApiUrl}/submissions?base64_encoded=false&wait=false";
+                var postUrl = $"{_judge0ApiUrl}/submissions?base64_encoded=true&wait=false";
                 _logger.LogInformation("Posting to Judge0 URL: {PostUrl}", postUrl);
                 var httpResponse = await client.PostAsync(postUrl, httpContent);
 
@@ -352,7 +354,7 @@ namespace dotnetBitSmith.Services {
                     int pollHttpRetries = 0;
                     while (pollHttpRetries < 5) {
                         try {
-                            var getUrl = $"{_judge0ApiUrl}/submissions/{judgeToken}?base64_encoded=false";
+                            var getUrl = $"{_judge0ApiUrl}/submissions/{judgeToken}?base64_encoded=true";
                             getResponse = await client.GetAsync(getUrl);
                             if (getResponse.IsSuccessStatusCode) break;
                         } catch { }
@@ -372,6 +374,12 @@ namespace dotnetBitSmith.Services {
 
                     var getResponseContent = await getResponse.Content.ReadAsStringAsync();
                     finalJudgeResponse = JsonSerializer.Deserialize<Judge0GetSubmissionResponse>(getResponseContent);
+                    // Decode base64 fields from Judge0 response
+                    if (finalJudgeResponse != null) {
+                        finalJudgeResponse.StandardOutput = DecodeBase64Safe(finalJudgeResponse.StandardOutput);
+                        finalJudgeResponse.StandardError  = DecodeBase64Safe(finalJudgeResponse.StandardError);
+                        finalJudgeResponse.CompileOutput  = DecodeBase64Safe(finalJudgeResponse.CompileOutput);
+                    }
 
                     if (finalJudgeResponse == null) {
                         return new SandboxResult {
@@ -627,6 +635,16 @@ namespace dotnetBitSmith.Services {
                     p?.WaitForExit(2000);
                 }
             } catch { }
+        }
+
+        private static string? DecodeBase64Safe(string? b64) {
+            if (string.IsNullOrEmpty(b64)) return b64;
+            try {
+                var bytes = Convert.FromBase64String(b64);
+                return Encoding.UTF8.GetString(bytes);
+            } catch {
+                return b64; // Return as-is if not valid base64
+            }
         }
 
         private static string NormalizeMetaType(string? rawType) {
