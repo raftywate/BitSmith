@@ -1753,7 +1753,9 @@ void print_tree_node(struct TreeNode* root) {
         private static string WrapCsharp(string userCode, string methodName, List<string> paramTypes, string returnType) {
             var sb = new StringBuilder();
             sb.AppendLine("using System;");
+            sb.AppendLine("using System.Collections;");
             sb.AppendLine("using System.Collections.Generic;");
+            sb.AppendLine("using System.Reflection;");
             sb.AppendLine();
             sb.AppendLine("public class ListNode {");
             sb.AppendLine("    public int val;");
@@ -1856,44 +1858,52 @@ void print_tree_node(struct TreeNode* root) {
             sb.AppendLine();
             sb.AppendLine("    public static void Main() {");
             sb.AppendLine("        try {");
-            sb.AppendLine("            while (true) {");
-            for (int i = 0; i < paramTypes.Count; i++) {
-                sb.AppendLine($"                string line{i} = Console.ReadLine();");
-                sb.AppendLine($"                if (line{i} == null) return;");
-            }
-            var callArgs = new List<string>();
-            for (int i = 0; i < paramTypes.Count; i++) {
-                string csharpType = GetCSharpType(paramTypes[i]);
-                string parser;
-                if (paramTypes[i] == "ListNode") parser = $"ParseListNode(line{i})";
-                else if (paramTypes[i] == "TreeNode") parser = $"ParseTreeNode(line{i})";
-                else parser = $"SimpleJson.Deserialize<{csharpType}>(line{i})";
-                sb.AppendLine($"                var arg{i} = {parser};");
-                callArgs.Add($"arg{i}");
-            }
+            sb.AppendLine("            var sol = new Solution();");
+            sb.AppendLine("            var solType = typeof(Solution);");
+            sb.AppendLine("            var methods = solType.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);");
             string csharpMethodName = char.ToUpper(methodName[0]) + methodName.Substring(1);
-            sb.AppendLine("                var sol = new Solution();");
-            if (returnType == "void") {
-                sb.AppendLine($"                sol.{csharpMethodName}({string.Join(", ", callArgs)});");
-                if (paramTypes.Count > 0) {
-                    string serializeCall = "arg0";
-                    if (paramTypes[0] == "ListNode") serializeCall = "SerializeListNode(arg0)";
-                    else if (paramTypes[0] == "TreeNode") serializeCall = "SerializeTreeNode(arg0)";
-                    sb.AppendLine($"                Console.WriteLine(SimpleJson.Serialize({serializeCall}));");
-                }
-            } else {
-                sb.AppendLine($"                var res = sol.{csharpMethodName}({string.Join(", ", callArgs)});");
-                string serializeCall = "res";
-                if (returnType == "ListNode") {
-                    serializeCall = "SerializeListNode(res)";
-                } else if (returnType == "TreeNode") {
-                    serializeCall = "SerializeTreeNode(res)";
-                }
-                sb.AppendLine($"                Console.WriteLine(SimpleJson.Serialize({serializeCall}));");
-            }
+            sb.AppendLine("            MethodInfo targetMethod = null;");
+            sb.AppendLine("            foreach (var m in methods) {");
+            sb.AppendLine($"                if (string.Equals(m.Name, \"{csharpMethodName}\", StringComparison.OrdinalIgnoreCase)) {{ targetMethod = m; break; }}");
+            sb.AppendLine("            }");
+            sb.AppendLine("            if (targetMethod == null && methods.Length > 0) targetMethod = methods[0];");
+            sb.AppendLine("            if (targetMethod == null) throw new Exception(\"No solution method found.\");");
+            sb.AppendLine();
+            sb.AppendLine("            var parameters = targetMethod.GetParameters();");
+            sb.AppendLine("            int P = parameters.Length;");
+            sb.AppendLine();
+            sb.AppendLine("            while (true) {");
+            sb.AppendLine("                string[] lines = new string[P];");
+            sb.AppendLine("                for (int i = 0; i < P; i++) {");
+            sb.AppendLine("                    lines[i] = Console.ReadLine();");
+            sb.AppendLine("                    if (lines[i] == null) return;");
+            sb.AppendLine("                }");
+            sb.AppendLine();
+            sb.AppendLine("                object[] callArgs = new object[P];");
+            sb.AppendLine("                for (int i = 0; i < P; i++) {");
+            sb.AppendLine("                    if (parameters[i].ParameterType == typeof(ListNode)) callArgs[i] = ParseListNode(lines[i]);");
+            sb.AppendLine("                    else if (parameters[i].ParameterType == typeof(TreeNode)) callArgs[i] = ParseTreeNode(lines[i]);");
+            sb.AppendLine("                    else callArgs[i] = SimpleJson.Deserialize(lines[i], parameters[i].ParameterType);");
+            sb.AppendLine("                }");
+            sb.AppendLine();
+            sb.AppendLine("                var res = targetMethod.Invoke(sol, callArgs);");
+            sb.AppendLine("                if (targetMethod.ReturnType == typeof(void)) {");
+            sb.AppendLine("                    if (P > 0) {");
+            sb.AppendLine("                        object ser = callArgs[0];");
+            sb.AppendLine("                        if (ser is ListNode ln) ser = SerializeListNode(ln);");
+            sb.AppendLine("                        else if (ser is TreeNode tn) ser = SerializeTreeNode(tn);");
+            sb.AppendLine("                        Console.WriteLine(SimpleJson.Serialize(ser));");
+            sb.AppendLine("                    }");
+            sb.AppendLine("                } else {");
+            sb.AppendLine("                    object ser = res;");
+            sb.AppendLine("                    if (ser is ListNode ln) ser = SerializeListNode(ln);");
+            sb.AppendLine("                    else if (ser is TreeNode tn) ser = SerializeTreeNode(tn);");
+            sb.AppendLine("                    Console.WriteLine(SimpleJson.Serialize(ser));");
+            sb.AppendLine("                }");
             sb.AppendLine("            }");
             sb.AppendLine("        } catch (Exception ex) {");
-            sb.AppendLine("            Console.Error.WriteLine(ex.Message);");
+            sb.AppendLine("            var cause = ex.InnerException ?? ex;");
+            sb.AppendLine("            Console.Error.WriteLine(cause.Message);");
             sb.AppendLine("            Environment.Exit(1);");
             sb.AppendLine("        }");
             sb.AppendLine("    }");
@@ -1902,6 +1912,10 @@ void print_tree_node(struct TreeNode* root) {
             sb.AppendLine("public static class SimpleJson {");
             sb.AppendLine("    public static T Deserialize<T>(string json) {");
             sb.AppendLine("        return (T)DeserializeValue(json, typeof(T));");
+            sb.AppendLine("    }");
+            sb.AppendLine();
+            sb.AppendLine("    public static object Deserialize(string json, Type type) {");
+            sb.AppendLine("        return DeserializeValue(json, type);");
             sb.AppendLine("    }");
             sb.AppendLine();
             sb.AppendLine("    private static object DeserializeValue(string json, Type type) {");
@@ -1932,7 +1946,7 @@ void print_tree_node(struct TreeNode* root) {
             sb.AppendLine("            }");
             sb.AppendLine("            return arr;");
             sb.AppendLine("        }");
-            sb.AppendLine("        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>)) {");
+            sb.AppendLine("        if (type.IsGenericType && (type.GetGenericTypeDefinition() == typeof(List<>) || type.GetGenericTypeDefinition() == typeof(IList<>) || type.GetGenericTypeDefinition() == typeof(ICollection<>) || type.GetGenericTypeDefinition() == typeof(IEnumerable<>))) {");
             sb.AppendLine("            var elemType = type.GetGenericArguments()[0];");
             sb.AppendLine("            var list = ParseJsonArray(json);");
             sb.AppendLine("            var listInstance = (System.Collections.IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(elemType));");
@@ -1943,6 +1957,7 @@ void print_tree_node(struct TreeNode* root) {
             sb.AppendLine("        }");
             sb.AppendLine("        return null;");
             sb.AppendLine("    }");
+
             sb.AppendLine();
             sb.AppendLine("    private static List<string> ParseJsonArray(string json) {");
             sb.AppendLine("        var result = new List<string>();");
