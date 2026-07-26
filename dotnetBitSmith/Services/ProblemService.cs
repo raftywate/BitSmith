@@ -479,27 +479,27 @@ namespace dotnetBitSmith.Services {
 
         public async Task<PoDActivityModel> GetPoDActivityAsync(Guid userId, int tzOffsetMinutes, DateOnly todayLocal) {
             // Find all PoDs
-            var pods = await _context.ProblemOfTheDays.ToListAsync();
+            var pods = await _context.ProblemOfTheDays.AsNoTracking().ToListAsync();
             
-            // For each PoD, check if there's an Accepted submission by the user ON THAT SPECIFIC POTD DATE
+            // Get all accepted submissions for this user
+            var userAcceptedSubs = await _context.Submissions.AsNoTracking()
+                .Where(s => s.UserId == userId && s.Status == dotnetBitSmith.Entities.Enums.SubmissionStatus.Accepted)
+                .Select(s => new { s.ProblemId, s.CreatedAt })
+                .ToListAsync();
+
             var solvedDates = new List<DateOnly>();
             foreach (var pod in pods) {
-                var podDateStartUtc = pod.Date.ToDateTime(TimeOnly.MinValue).AddMinutes(tzOffsetMinutes);
-                var podDateEndUtc = podDateStartUtc.AddDays(1);
-
-                var hasSolvedOnDate = await _context.Submissions.AnyAsync(s => 
-                    s.UserId == userId && 
-                    s.ProblemId == pod.ProblemId && 
-                    s.Status == dotnetBitSmith.Entities.Enums.SubmissionStatus.Accepted &&
-                    s.CreatedAt >= podDateStartUtc && 
-                    s.CreatedAt < podDateEndUtc);
+                // Check if user submitted an Accepted solution on the date when pod was active (converted to local date)
+                bool hasSolvedOnDate = userAcceptedSubs.Any(s => 
+                    s.ProblemId == pod.ProblemId &&
+                    DateOnly.FromDateTime(DateTime.SpecifyKind(s.CreatedAt, DateTimeKind.Utc).AddMinutes(-tzOffsetMinutes)) == pod.Date);
 
                 if (hasSolvedOnDate) {
                     solvedDates.Add(pod.Date);
                 }
             }
 
-            var sortedSolved = solvedDates.OrderByDescending(d => d).ToList();
+            var sortedSolved = solvedDates.OrderByDescending(d => d).ToHashSet();
             
             int streak = 0;
             var today = todayLocal;
