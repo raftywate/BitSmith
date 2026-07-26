@@ -287,6 +287,62 @@ namespace dotnetBitSmith.Controllers {
             });
         }
 
+        [HttpGet("debug-metadata")]
+        public async Task<IActionResult> DebugMetadata(
+            [FromServices] dotnetBitSmith.Data.ApplicationDbContext context,
+            [FromQuery] string title = "Reconstruct Itinerary")
+        {
+            var problem = await context.Problems.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Title == title);
+
+            if (problem == null)
+                return NotFound(new { error = $"Problem '{title}' not found in DB" });
+
+            // Try parsing the MetaDataJson the same way GetProblemMetadataAsync does
+            string parsedName = "(none)";
+            List<string> parsedParams = new();
+            string parsedReturn = "(none)";
+            string parseError = "";
+
+            if (!string.IsNullOrWhiteSpace(problem.MetaDataJson)) {
+                try {
+                    using var doc = JsonDocument.Parse(problem.MetaDataJson);
+                    var meta = doc.RootElement;
+                    parsedName = meta.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "(missing)";
+                    parsedReturn = "(missing)";
+                    if (meta.TryGetProperty("return", out var ret)) {
+                        if (ret.ValueKind == JsonValueKind.Object && ret.TryGetProperty("type", out var t))
+                            parsedReturn = t.GetString() ?? "";
+                        else if (ret.ValueKind == JsonValueKind.String)
+                            parsedReturn = ret.GetString() ?? "";
+                    }
+                    if (meta.TryGetProperty("params", out var pArr) && pArr.ValueKind == JsonValueKind.Array) {
+                        foreach (var p in pArr.EnumerateArray()) {
+                            if (p.TryGetProperty("type", out var pt))
+                                parsedParams.Add(pt.GetString() ?? "?");
+                            else
+                                parsedParams.Add("(no type field)");
+                        }
+                    } else {
+                        parsedParams.Add("(params property missing or not array)");
+                    }
+                } catch (Exception ex) {
+                    parseError = ex.Message;
+                }
+            }
+
+            return Ok(new {
+                title = problem.Title,
+                metaDataJsonRaw = problem.MetaDataJson,
+                metaDataJsonLength = problem.MetaDataJson?.Length ?? 0,
+                parsedMethodName = parsedName,
+                parsedParams,
+                parsedReturnType = parsedReturn,
+                parseError,
+                testCaseCount = await context.TestCases.CountAsync(tc => tc.ProblemId == problem.Id)
+            });
+        }
+
         [HttpPost("generate-test-cases")]
         public async Task<IActionResult> GenerateTestCases(
             [FromServices] dotnetBitSmith.Data.ApplicationDbContext context,
