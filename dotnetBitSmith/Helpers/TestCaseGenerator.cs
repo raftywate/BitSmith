@@ -515,13 +515,16 @@ namespace dotnetBitSmith.Helpers {
         }
 
         /// <summary>
-        /// Seeds sample test cases from problems.json for problems that have 0 test cases.
-        /// Also sets MetaDataJson if it is null. Expected outputs are extracted from the
-        /// problem description HTML. Does NOT require fetching a Python solution.
+        /// Two-phase fix:
+        /// 1. Sets MetaDataJson from problems.json for ALL problems where it is currently null
+        ///    (regardless of how many test cases they have). This fixes the "no args in wrapper" bug.
+        /// 2. Seeds sample test cases from problems.json only for problems that have 0 test cases.
+        ///    Expected outputs are extracted from the problem description HTML.
+        /// Does NOT require fetching a Python solution.
         /// </summary>
         public static async Task<string> SeedSampleTestCasesAsync(
             ApplicationDbContext context,
-            int maxProblemsToProcess = 50)
+            int maxProblemsToProcess = 225)
         {
             var jsonPath = Path.Combine(Directory.GetCurrentDirectory(), "problems.json");
             if (!File.Exists(jsonPath)) return "Error: problems.json not found.";
@@ -542,36 +545,37 @@ namespace dotnetBitSmith.Helpers {
                 return $"Error parsing problems.json: {ex.Message}";
             }
 
-            // Get problems with 0 test cases
-            var dbProblems = await context.Problems
+            // ── Phase 1: Fix MetaDataJson for ALL problems with null metadata ──────────
+            var nullMetaProblems = await context.Problems
+                .Where(p => p.MetaDataJson == null || p.MetaDataJson == "")
+                .ToListAsync();
+
+            int metaSet = 0;
+            foreach (var problem in nullMetaProblems) {
+                if (!jsonLookup.TryGetValue(problem.Title, out var jsonProb)) continue;
+                if (jsonProb.TryGetProperty("metaData", out var metaElem)) {
+                    problem.MetaDataJson = metaElem.GetRawText();
+                    metaSet++;
+                }
+            }
+
+            // ── Phase 2: Seed test cases only for problems with 0 test cases ──────────
+            var zeroTcProblems = await context.Problems
                 .Include(p => p.TestCases)
                 .Where(p => p.TestCases.Count == 0)
                 .Take(maxProblemsToProcess)
                 .ToListAsync();
 
-            if (!dbProblems.Any()) return "All problems already have at least one test case.";
-
             int seeded = 0;
-            int metaSet = 0;
-
-            foreach (var problem in dbProblems) {
+            foreach (var problem in zeroTcProblems) {
                 if (!jsonLookup.TryGetValue(problem.Title, out var jsonProb)) continue;
-
-                // Set MetaDataJson if missing
-                if (string.IsNullOrWhiteSpace(problem.MetaDataJson)) {
-                    if (jsonProb.TryGetProperty("metaData", out var metaElem)) {
-                        problem.MetaDataJson = metaElem.GetRawText();
-                        metaSet++;
-                    }
-                }
 
                 // Get param count from metaData
                 int paramCount = 1;
                 if (jsonProb.TryGetProperty("metaData", out var meta) &&
                     meta.TryGetProperty("params", out var paramsProp) &&
                     paramsProp.ValueKind == JsonValueKind.Array) {
-                    paramCount = paramsProp.GetArrayLength();
-                    if (paramCount < 1) paramCount = 1;
+                    paramCount = Math.Max(1, paramsProp.GetArrayLength());
                 }
 
                 // Get sample inputs from testCases array in problems.json
@@ -614,8 +618,10 @@ namespace dotnetBitSmith.Helpers {
             }
 
             await context.SaveChangesAsync();
-            return $"Success: Seeded {seeded} sample test cases for {dbProblems.Count} problems. Set metadata for {metaSet} problems.";
+            return $"Done: Fixed MetaDataJson for {metaSet} problems. " +
+                   $"Seeded {seeded} sample test cases for {zeroTcProblems.Count} problems with 0 test cases.";
         }
+
 
         private static List<string> ExtractExpectedOutputs(string htmlContent) {
             var outputs = new List<string>();
