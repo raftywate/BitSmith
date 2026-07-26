@@ -499,7 +499,7 @@
           </div>
           <div class="panel" style="flex: 1; min-width: 10rem; padding: 0.85rem; display: grid; gap: 4px;">
             <span style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.05em;">Memory</span>
-            <span style="font-size: 1.2rem; font-weight: 800; color: var(--text-strong);">{{ detail.executionMemoryKb ? (detail.executionMemoryKb / 1024 | number:'1.2-2') + ' MB' : '—' }}</span>
+            <span style="font-size: 1.2rem; font-weight: 800; color: var(--text-strong);">{{ detail.executionMemoryKb ? (detail.executionMemoryKb >= 1024 ? (detail.executionMemoryKb / 1024 | number:'1.1-2') + ' MB' : detail.executionMemoryKb + ' KB') : '—' }}</span>
           </div>
         </div>
 
@@ -624,7 +624,7 @@
           </div>
           <div class="submission-card__metrics">
             <span>Time: {{ submission.executionTimeMs ?? '—' }} ms</span>
-            <span>Memory: {{ submission.executionMemoryKb ?? '—' }} KB</span>
+            <span>Memory: {{ submission.executionMemoryKb ? (submission.executionMemoryKb >= 1024 ? (submission.executionMemoryKb / 1024 | number:'1.1-2') + ' MB' : submission.executionMemoryKb + ' KB') : '—' }}</span>
           </div>
         </button>
         }

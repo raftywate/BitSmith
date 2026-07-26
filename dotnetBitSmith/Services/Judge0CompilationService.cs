@@ -91,7 +91,7 @@ namespace dotnetBitSmith.Services {
 
                 submission.ErrorMessage = result.Error;
                 submission.ExecutionTimeMs = result.ExecutionTimeMs;
-                submission.ExecutionMemoryKb = null; // Memory tracking not supported in basic Phase 1
+                submission.ExecutionMemoryKb = result.ExecutionMemoryKb;
 
                 submission.TotalCount = testCases.Count;
                 submission.PassedCount = 0;
@@ -192,7 +192,7 @@ namespace dotnetBitSmith.Services {
                 Status = result.Status == "Success" ? (isPassed ? "Accepted" : "Wrong Answer") : result.Status,
                 Error = result.Error,
                 ExecutionTimeMs = result.ExecutionTimeMs,
-                ExecutionMemoryKb = null,
+                ExecutionMemoryKb = result.ExecutionMemoryKb,
                 Passed = isPassed
             };
         }
@@ -251,7 +251,7 @@ namespace dotnetBitSmith.Services {
                     Status = status,
                     Error = result.Error,
                     ExecutionTimeMs = result.ExecutionTimeMs,
-                    ExecutionMemoryKb = null,
+                    ExecutionMemoryKb = result.ExecutionMemoryKb,
                     Passed = isPassed
                 });
             }
@@ -398,6 +398,7 @@ namespace dotnetBitSmith.Services {
                 if (double.TryParse(finalJudgeResponse.Time?.Replace("s", ""), out double timeInSeconds)) {
                     result.ExecutionTimeMs = (int)(timeInSeconds * 1000);
                 }
+                result.ExecutionMemoryKb = finalJudgeResponse.Memory;
 
                 if (finalJudgeResponse.Status.Id == 3 || finalJudgeResponse.Status.Id == 4) {
                     result.Status = "Success";
@@ -1890,14 +1891,18 @@ void print_tree_node(struct TreeNode* root) {
             sb.AppendLine("                if (targetMethod.ReturnType == typeof(void)) {");
             sb.AppendLine("                    if (P > 0) {");
             sb.AppendLine("                        object ser = callArgs[0];");
-            sb.AppendLine("                        if (ser is ListNode ln) ser = SerializeListNode(ln);");
-            sb.AppendLine("                        else if (ser is TreeNode tn) ser = SerializeTreeNode(tn);");
+            sb.AppendLine("                        ListNode ln = ser as ListNode;");
+            sb.AppendLine("                        TreeNode tn = ser as TreeNode;");
+            sb.AppendLine("                        if (ln != null) ser = SerializeListNode(ln);");
+            sb.AppendLine("                        else if (tn != null) ser = SerializeTreeNode(tn);");
             sb.AppendLine("                        Console.WriteLine(SimpleJson.Serialize(ser));");
             sb.AppendLine("                    }");
             sb.AppendLine("                } else {");
             sb.AppendLine("                    object ser = res;");
-            sb.AppendLine("                    if (ser is ListNode ln) ser = SerializeListNode(ln);");
-            sb.AppendLine("                    else if (ser is TreeNode tn) ser = SerializeTreeNode(tn);");
+            sb.AppendLine("                    ListNode ln = ser as ListNode;");
+            sb.AppendLine("                    TreeNode tn = ser as TreeNode;");
+            sb.AppendLine("                    if (ln != null) ser = SerializeListNode(ln);");
+            sb.AppendLine("                    else if (tn != null) ser = SerializeTreeNode(tn);");
             sb.AppendLine("                    Console.WriteLine(SimpleJson.Serialize(ser));");
             sb.AppendLine("                }");
             sb.AppendLine("            }");
@@ -2589,5 +2594,6 @@ void print_tree_node(struct TreeNode* root) {
         public string? Stdout { get; set; }
         public string? Error { get; set; }
         public int? ExecutionTimeMs { get; set; }
+        public int? ExecutionMemoryKb { get; set; }
     }
 }
