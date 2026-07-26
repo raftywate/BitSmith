@@ -310,6 +310,20 @@ using (var scope = app.Services.CreateScope()) {
         logger.LogError(ex, "Failed to create User verification database columns on startup.");
     }
 
+    // Auto-fix MetaDataJson for any problems that are missing it.
+    // This is idempotent and fast — runs in background so it doesn't delay startup.
+    // Ensures the C++ / Java / Python wrappers always receive correct param types.
+    _ = Task.Run(async () => {
+        try {
+            using var scope = app.Services.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<dotnetBitSmith.Data.ApplicationDbContext>();
+            var result = await dotnetBitSmith.Helpers.TestCaseGenerator.SeedSampleTestCasesAsync(dbContext);
+            logger.LogInformation("Startup metadata fix: {Result}", result);
+        } catch (Exception ex) {
+            logger.LogWarning(ex, "Startup metadata fix failed (non-critical).");
+        }
+    });
+
     // Precompile stdc++.h in bitsmith-sandbox-gcc container in background to speed up C++ judge times
     _ = Task.Run(async () => {
         try {
@@ -356,14 +370,16 @@ using (var scope = app.Services.CreateScope()) {
                 httpClient.DefaultRequestHeaders.Add("X-RapidAPI-Key", judge0Key);
             }
 
+            // Use base64_encoded=true to match the main submission path
+            var b64Code = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("#include<bits/stdc++.h>\nusing namespace std;\nint main(){cout<<1;return 0;}"));
             var warmupPayload = new {
-                source_code = "#include<bits/stdc++.h>\nusing namespace std;\nint main(){cout<<1;return 0;}",
+                source_code = b64Code,
                 language_id = 54,
                 stdin = ""
             };
             var json = System.Text.Json.JsonSerializer.Serialize(warmupPayload);
             var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
-            var response = await httpClient.PostAsync($"{judge0Url}/submissions?base64_encoded=false&wait=true", content);
+            var response = await httpClient.PostAsync($"{judge0Url}/submissions?base64_encoded=true&wait=true", content);
             logger.LogInformation("Judge0 VM warm-up completed. Status: {Status}", response.StatusCode);
         } catch (Exception ex) {
             logger.LogWarning(ex, "Judge0 VM warm-up failed (non-critical).");
