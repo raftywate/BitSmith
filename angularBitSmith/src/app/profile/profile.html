@@ -177,7 +177,7 @@
     <div class="heatmap" aria-label="Accepted submission activity over the last year">
       @for (day of heatmapDays(); track day.date) {
       <span class="heatmap__day" [attr.data-level]="heatmapLevel(day.count)"
-        [title]="day.count + ' accepted on ' + day.date"></span>
+        [title]="(day.count === 0 ? 'No submissions' : day.count + (day.count === 1 ? ' submission' : ' submissions')) + ' on ' + day.date"></span>
       }
     </div>
   </section>

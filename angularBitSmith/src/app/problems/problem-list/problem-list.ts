@@ -50,6 +50,7 @@ export class ProblemList implements OnInit {
     showRowTopics = signal(false);
     totalSolved = signal<number | null>(null);
     currentStreak = signal<number>(0);
+    userActivityMap = signal<Map<string, number>>(new Map());
     heatmapDays = signal<{date: string, count: number}[]>([]);
     revealedRows = signal<Set<string>>(new Set<string>());
     
@@ -71,19 +72,29 @@ export class ProblemList implements OnInit {
             days.push(null);
         }
         
-        const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format
+        const todayStr = new Date().toLocaleDateString('en-CA');
+        const activity = this.userActivityMap();
         
         for (let i = 1; i <= lastDay.getDate(); i++) {
             const dateObj = new Date(year, month, i);
             const dateStr = dateObj.toLocaleDateString('en-CA');
             const isFuture = dateObj > new Date();
+            const subCount = activity.get(dateStr) ?? 0;
+            const isSolved = this.podSolvedDates().includes(dateStr);
+
+            let tooltip = `${dateStr}: ${subCount} submission${subCount !== 1 ? 's' : ''}`;
+            if (isSolved) {
+                tooltip += ' (POTD Solved)';
+            }
 
             days.push({
                 date: i,
                 dateStr: dateStr,
-                isSolved: this.podSolvedDates().includes(dateStr),
+                isSolved: isSolved,
                 isToday: dateStr === todayStr,
-                isFuture: isFuture
+                isFuture: isFuture,
+                subCount: subCount,
+                tooltip: tooltip
             });
         }
         return days;
@@ -159,7 +170,10 @@ export class ProblemList implements OnInit {
             this.userService.getMyProfile().subscribe({
                 next: profile => {
                     this.totalSolved.set(profile.stats.totalSolved);
-                    // Legacy heatmap data removed as we use PoD calendar
+                    const activityMap = new Map<string, number>(
+                        (profile?.stats?.activity ?? []).map((day: any) => [day.date.slice(0, 10), Number(day.count)])
+                    );
+                    this.userActivityMap.set(activityMap);
                 }
             });
 

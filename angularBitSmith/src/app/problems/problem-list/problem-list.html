@@ -41,6 +41,7 @@
                    (click)="openPoDForDate(day.dateStr, day.isFuture)"
                    [style.cursor]="day.isFuture ? 'default' : 'pointer'"
                    [style.opacity]="day.isFuture ? '0.5' : '1'"
+                   [title]="day.tooltip"
                    style="border: none; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; border-radius: 4px; margin: auto; transition: transform 0.1s;"
                    [style.background]="day.isSolved ? '#00b8a3' : (day.isToday ? 'var(--surface-3)' : 'transparent')"
                    [style.color]="day.isSolved ? '#fff' : 'var(--text-strong)'"
