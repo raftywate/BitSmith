@@ -545,15 +545,29 @@ namespace dotnetBitSmith.Helpers {
                 return $"Error parsing problems.json: {ex.Message}";
             }
 
-            // ── Phase 1: Fix MetaDataJson for ALL problems with null metadata ──────────
-            var nullMetaProblems = await context.Problems
-                .Where(p => p.MetaDataJson == null || p.MetaDataJson == "")
-                .ToListAsync();
+            // ── Phase 1: Fix MetaDataJson for ALL problems with null/bad metadata ────────
+            // "Bad" = params is stored as an object {"type":"..."} instead of an array [{"type":"..."}]
+            var allProblems = await context.Problems.ToListAsync();
 
             int metaSet = 0;
-            foreach (var problem in nullMetaProblems) {
+            foreach (var problem in allProblems) {
                 if (!jsonLookup.TryGetValue(problem.Title, out var jsonProb)) continue;
-                if (jsonProb.TryGetProperty("metaData", out var metaElem)) {
+
+                bool needsFix = string.IsNullOrWhiteSpace(problem.MetaDataJson);
+                if (!needsFix && !string.IsNullOrWhiteSpace(problem.MetaDataJson)) {
+                    // Also fix if params is stored as object instead of array (legacy bad format)
+                    try {
+                        using var existingDoc = JsonDocument.Parse(problem.MetaDataJson);
+                        if (existingDoc.RootElement.TryGetProperty("params", out var p)
+                            && p.ValueKind != JsonValueKind.Array) {
+                            needsFix = true; // params is object or missing — overwrite with correct format
+                        }
+                    } catch {
+                        needsFix = true; // Unparseable — overwrite
+                    }
+                }
+
+                if (needsFix && jsonProb.TryGetProperty("metaData", out var metaElem)) {
                     problem.MetaDataJson = metaElem.GetRawText();
                     metaSet++;
                 }

@@ -712,9 +712,19 @@ namespace dotnetBitSmith.Services {
                             }
                         }
                         var paramTypes = new List<string>();
-                        if (metaData.TryGetProperty("params", out var paramsProp) && paramsProp.ValueKind == JsonValueKind.Array) {
-                            foreach (var param in paramsProp.EnumerateArray()) {
-                                if (param.TryGetProperty("type", out var pType)) {
+                        if (metaData.TryGetProperty("params", out var paramsProp)) {
+                            if (paramsProp.ValueKind == JsonValueKind.Array) {
+                                // Standard format: [{"name":"x","type":"integer"}, ...]
+                                foreach (var param in paramsProp.EnumerateArray()) {
+                                    if (param.TryGetProperty("type", out var pType)) {
+                                        paramTypes.Add(pType.GetString() ?? "integer");
+                                    } else {
+                                        paramTypes.Add("integer");
+                                    }
+                                }
+                            } else if (paramsProp.ValueKind == JsonValueKind.Object) {
+                                // Legacy compact format: {"type":"string[][]"} (single param as object)
+                                if (paramsProp.TryGetProperty("type", out var pType)) {
                                     paramTypes.Add(pType.GetString() ?? "integer");
                                 } else {
                                     paramTypes.Add("integer");
@@ -746,9 +756,19 @@ namespace dotnetBitSmith.Services {
                                 }
                             }
                             var paramTypes = new List<string>();
-                            if (metaData.TryGetProperty("params", out var paramsProp) && paramsProp.ValueKind == JsonValueKind.Array) {
-                                foreach (var param in paramsProp.EnumerateArray()) {
-                                    if (param.TryGetProperty("type", out var pType)) {
+                            if (metaData.TryGetProperty("params", out var paramsProp)) {
+                                if (paramsProp.ValueKind == JsonValueKind.Array) {
+                                    // Standard format: [{"name":"x","type":"integer"}, ...]
+                                    foreach (var param in paramsProp.EnumerateArray()) {
+                                        if (param.TryGetProperty("type", out var pType)) {
+                                            paramTypes.Add(pType.GetString() ?? "integer");
+                                        } else {
+                                            paramTypes.Add("integer");
+                                        }
+                                    }
+                                } else if (paramsProp.ValueKind == JsonValueKind.Object) {
+                                    // Legacy compact format: {"type":"string[][]"} (single param)
+                                    if (paramsProp.TryGetProperty("type", out var pType)) {
                                         paramTypes.Add(pType.GetString() ?? "integer");
                                     } else {
                                         paramTypes.Add("integer");
