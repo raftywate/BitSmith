@@ -493,11 +493,11 @@
         </div>
 
         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-          <div class="panel" style="flex: 1; min-width: 10rem; padding: 0.85rem; display: grid; gap: 4px;">
+          <div class="panel" style="flex: 1 1 12rem; min-width: 0; padding: 0.85rem; display: grid; gap: 4px;">
             <span style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.05em;">Runtime</span>
             <span style="font-size: 1.2rem; font-weight: 800; color: var(--text-strong);">{{ detail.executionTimeMs ?? '—' }} ms</span>
           </div>
-          <div class="panel" style="flex: 1; min-width: 10rem; padding: 0.85rem; display: grid; gap: 4px;">
+          <div class="panel" style="flex: 1 1 12rem; min-width: 0; padding: 0.85rem; display: grid; gap: 4px;">
             <span style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.05em;">Memory</span>
             <span style="font-size: 1.2rem; font-weight: 800; color: var(--text-strong);">{{ detail.executionMemoryKb ? (detail.executionMemoryKb >= 1024 ? (detail.executionMemoryKb / 1024 | number:'1.1-2') + ' MB' : detail.executionMemoryKb + ' KB') : '—' }}</span>
           </div>
@@ -525,7 +525,7 @@
                   </svg>
                 </button>
               </div>
-              <pre style="margin: 0; padding: 0.65rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; font-family: var(--font-mono); font-size: 0.88rem; white-space: pre-wrap; word-break: break-all; overflow-wrap: anywhere;">{{ detail.failedTestCaseInput }}</pre>
+              <pre style="margin: 0; padding: 0.65rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; font-family: var(--font-mono); font-size: 0.88rem; white-space: pre-wrap; word-break: break-all; overflow-wrap: anywhere; overflow-x: hidden;">{{ detail.failedTestCaseInput }}</pre>
             </article>
             <article>
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -539,7 +539,7 @@
                   </svg>
                 </button>
               </div>
-              <pre style="margin: 0; padding: 0.65rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; font-family: var(--font-mono); font-size: 0.88rem; white-space: pre-wrap; word-break: break-all; overflow-wrap: anywhere;">{{ detail.failedTestCaseExpected }}</pre>
+              <pre style="margin: 0; padding: 0.65rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; font-family: var(--font-mono); font-size: 0.88rem; white-space: pre-wrap; word-break: break-all; overflow-wrap: anywhere; overflow-x: hidden;">{{ detail.failedTestCaseExpected }}</pre>
             </article>
             <article>
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -555,7 +555,7 @@
                 </button>
                 }
               </div>
-              <pre style="margin: 0; padding: 0.65rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; font-family: var(--font-mono); font-size: 0.88rem; white-space: pre-wrap; word-break: break-all; overflow-wrap: anywhere;">{{ detail.failedTestCaseActual || '—' }}</pre>
+              <pre style="margin: 0; padding: 0.65rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; font-family: var(--font-mono); font-size: 0.88rem; white-space: pre-wrap; word-break: break-all; overflow-wrap: anywhere; overflow-x: hidden;">{{ detail.failedTestCaseActual || '—' }}</pre>
             </article>
           </div>
         </div>
@@ -578,14 +578,14 @@
         </div>
         }
 
-        <div style="display: flex; flex-direction: column; gap: 0.65rem; flex: 1; min-height: 0;">
-          <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
+        <div style="display: flex; flex-direction: column; gap: 0.65rem; flex: 1; min-height: 0; max-width: 100%;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
             <span style="font-size: 0.9rem; font-weight: 700; color: var(--text-muted);">Code | {{ detail.language | titlecase }}</span>
             <button type="button" class="btn btn--primary btn--small" style="padding: 0.35rem 0.85rem; height: auto;" (click)="copyCodeToEditor(detail.code, detail.language)">
               Copy to Editor
             </button>
           </div>
-          <pre style="margin: 0; padding: 1rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.75rem; font-family: var(--font-mono); font-size: 0.88rem; line-height: 1.55; overflow: auto; flex: 1; white-space: pre; color: var(--text-strong);">{{ detail.code }}</pre>
+          <pre style="margin: 0; padding: 1rem; background: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 0.75rem; font-family: var(--font-mono); font-size: 0.88rem; line-height: 1.55; flex: 1; white-space: pre-wrap; word-break: break-all; overflow-wrap: anywhere; overflow-x: hidden; color: var(--text-strong); max-width: 100%;">{{ detail.code }}</pre>
         </div>
       </div>
       } @else {

@@ -1229,8 +1229,10 @@
   background: var(--surface-3);
   padding: 0.85rem;
   border-radius: 0.75rem;
-  overflow-x: auto;
+  overflow-x: hidden;
   white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
   margin: 0;
   border: 1px solid var(--border-color);
   line-height: 1.5;
