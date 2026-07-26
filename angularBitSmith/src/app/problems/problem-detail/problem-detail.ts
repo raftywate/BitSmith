@@ -957,6 +957,11 @@ export class ProblemDetailComponent implements OnDestroy {
           } else {
             this.isSubmitting.set(false);
             this.toastService.success(`Submission finished with status: ${this.formatStatus(result.status)}.`);
+            if (result.status === 'Accepted') {
+              this.problem.update(p => p ? { ...p, status: 'Solved' } : null);
+            } else if (this.problem()?.status !== 'Solved') {
+              this.problem.update(p => p ? { ...p, status: 'Attempted' } : null);
+            }
           }
         },
         error: error => {
@@ -1003,6 +1008,13 @@ export class ProblemDetailComponent implements OnDestroy {
             if (sub.status !== 'Pending' && sub.status !== 'Running') {
               this.isSubmitting.set(false);
               this.toastService.success(`Submission finished with status: ${this.formatStatus(sub.status)}.`);
+
+              // Update problem status in UI signal without requiring a page refresh
+              if (sub.status === 'Accepted') {
+                this.problem.update(p => p ? { ...p, status: 'Solved' } : null);
+              } else if (this.problem()?.status !== 'Solved') {
+                this.problem.update(p => p ? { ...p, status: 'Attempted' } : null);
+              }
             }
           }
         },
