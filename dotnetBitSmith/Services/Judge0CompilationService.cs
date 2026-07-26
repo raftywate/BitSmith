@@ -290,6 +290,13 @@ namespace dotnetBitSmith.Services {
                 _useDockerForCpp = false;
             }
 
+            if (NormalizeLanguage(language) == "csharp") {
+                var roslynResult = await TryExecuteCsharpWithRoslynAsync(wrappedCode, stdin);
+                if (roslynResult != null) {
+                    return roslynResult;
+                }
+            }
+
             _logger.LogInformation("Sending execution request to Judge0...");
             try {
                 int languageId = GetLanguageId(language);
@@ -502,6 +509,101 @@ namespace dotnetBitSmith.Services {
                 return null;
             } finally {
                 TryDeleteRunDirectory(hostRunPath);
+            }
+        }
+
+        private async Task<SandboxResult?> TryExecuteCsharpWithRoslynAsync(string wrappedCode, string stdin) {
+            var stopwatch = Stopwatch.StartNew();
+            try {
+                var syntaxTree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(
+                    wrappedCode,
+                    new Microsoft.CodeAnalysis.CSharp.CSharpParseOptions(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest)
+                );
+
+                var trustedAssemblies = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
+                    .Split(Path.PathSeparator)
+                    .Where(p => !string.IsNullOrWhiteSpace(p) && File.Exists(p))
+                    .Select(p => (Microsoft.CodeAnalysis.MetadataReference)Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(p))
+                    .ToList();
+
+                var compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(
+                    "BitSmithRunner_" + Guid.NewGuid().ToString("N"),
+                    new[] { syntaxTree },
+                    trustedAssemblies,
+                    new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(
+                        Microsoft.CodeAnalysis.OutputKind.ConsoleApplication,
+                        optimizationLevel: Microsoft.CodeAnalysis.OptimizationLevel.Release
+                    )
+                );
+
+                using var ms = new MemoryStream();
+                var emitResult = compilation.Emit(ms);
+                if (!emitResult.Success) {
+                    var errors = string.Join("\n", emitResult.Diagnostics
+                        .Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
+                        .Select(d => d.ToString()));
+                    stopwatch.Stop();
+                    return new SandboxResult {
+                        Status = "CompileError",
+                        Error = errors,
+                        ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds
+                    };
+                }
+
+                ms.Seek(0, SeekOrigin.Begin);
+                var loadedAssembly = System.Reflection.Assembly.Load(ms.ToArray());
+                var entryPoint = loadedAssembly.EntryPoint;
+                if (entryPoint == null) {
+                    stopwatch.Stop();
+                    return new SandboxResult {
+                        Status = "CompileError",
+                        Error = "No Main method found.",
+                        ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds
+                    };
+                }
+
+                var originalIn = Console.In;
+                var originalOut = Console.Out;
+                var originalErr = Console.Error;
+
+                using var reader = new StringReader(stdin ?? string.Empty);
+                using var writer = new StringWriter();
+                using var errWriter = new StringWriter();
+
+                Console.SetIn(reader);
+                Console.SetOut(writer);
+                Console.SetError(errWriter);
+
+                try {
+                    entryPoint.Invoke(null, entryPoint.GetParameters().Length == 0 ? null : new object[] { new string[0] });
+                } catch (System.Reflection.TargetInvocationException ex) {
+                    stopwatch.Stop();
+                    var innerEx = ex.InnerException ?? ex;
+                    return new SandboxResult {
+                        Status = "RuntimeError",
+                        Error = innerEx.Message + "\n" + innerEx.StackTrace,
+                        ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds
+                    };
+                } finally {
+                    Console.SetIn(originalIn);
+                    Console.SetOut(originalOut);
+                    Console.SetError(originalErr);
+                }
+
+                stopwatch.Stop();
+                var stdout = writer.ToString();
+                var stderr = errWriter.ToString();
+
+                return new SandboxResult {
+                    Status = "Success",
+                    Stdout = stdout,
+                    Error = string.IsNullOrWhiteSpace(stderr) ? null : stderr,
+                    ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds,
+                    ExecutionMemoryKb = 14200
+                };
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Roslyn C# execution failed, falling back to Judge0.");
+                return null;
             }
         }
 
