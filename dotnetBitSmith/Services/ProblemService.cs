@@ -481,15 +481,20 @@ namespace dotnetBitSmith.Services {
             // Find all PoDs
             var pods = await _context.ProblemOfTheDays.ToListAsync();
             
-            // For each PoD, check if there's an Accepted submission by the user for that problem
+            // For each PoD, check if there's an Accepted submission by the user ON THAT SPECIFIC POTD DATE
             var solvedDates = new List<DateOnly>();
             foreach (var pod in pods) {
-                var hasSolved = await _context.Submissions.AnyAsync(s => 
+                var podDateStartUtc = pod.Date.ToDateTime(TimeOnly.MinValue).AddMinutes(tzOffsetMinutes);
+                var podDateEndUtc = podDateStartUtc.AddDays(1);
+
+                var hasSolvedOnDate = await _context.Submissions.AnyAsync(s => 
                     s.UserId == userId && 
                     s.ProblemId == pod.ProblemId && 
-                    s.Status == dotnetBitSmith.Entities.Enums.SubmissionStatus.Accepted);
+                    s.Status == dotnetBitSmith.Entities.Enums.SubmissionStatus.Accepted &&
+                    s.CreatedAt >= podDateStartUtc && 
+                    s.CreatedAt < podDateEndUtc);
 
-                if (hasSolved) {
+                if (hasSolvedOnDate) {
                     solvedDates.Add(pod.Date);
                 }
             }
@@ -505,6 +510,7 @@ namespace dotnetBitSmith.Services {
             if (sortedSolved.Contains(today)) {
                 currentDateToCheck = today;
             } else if (sortedSolved.Contains(yesterday)) {
+                // If they haven't solved today yet, but solved yesterday, the streak is still alive
                 currentDateToCheck = yesterday;
             } else {
                 return new PoDActivityModel { 
@@ -513,7 +519,7 @@ namespace dotnetBitSmith.Services {
                 };
             }
 
-            // Count backwards from currentDateToCheck
+            // Count backwards consecutive days from currentDateToCheck
             while (sortedSolved.Contains(currentDateToCheck)) {
                 streak++;
                 currentDateToCheck = currentDateToCheck.AddDays(-1);
