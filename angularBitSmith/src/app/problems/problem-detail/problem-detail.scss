@@ -1021,6 +1021,9 @@
   background: var(--editor-bg);
   color: var(--text-body);
   white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .sample-runner__input-list {
@@ -1031,12 +1034,20 @@
 .sample-runner__input-item {
   display: grid;
   gap: 0.35rem;
+  min-width: 0;
 
   > span {
     color: var(--accent);
     font-family: var(--font-mono);
     font-size: 0.78rem;
     text-transform: none;
+  }
+
+  > pre {
+    white-space: pre-wrap;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    min-width: 0;
   }
 }
 
