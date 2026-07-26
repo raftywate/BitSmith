@@ -481,19 +481,13 @@ namespace dotnetBitSmith.Services {
             // Find all PoDs
             var pods = await _context.ProblemOfTheDays.ToListAsync();
             
-            // For each PoD, check if there's a successful submission by the user ON THAT DATE
+            // For each PoD, check if there's an Accepted submission by the user for that problem
             var solvedDates = new List<DateOnly>();
             foreach (var pod in pods) {
-                // podDateStart in UTC
-                var podDateStart = pod.Date.ToDateTime(TimeOnly.MinValue).AddMinutes(tzOffsetMinutes);
-                var podDateEnd = podDateStart.AddDays(1);
-
                 var hasSolved = await _context.Submissions.AnyAsync(s => 
                     s.UserId == userId && 
                     s.ProblemId == pod.ProblemId && 
-                    s.Status == dotnetBitSmith.Entities.Enums.SubmissionStatus.Accepted &&
-                    s.CreatedAt >= podDateStart && 
-                    s.CreatedAt < podDateEnd);
+                    s.Status == dotnetBitSmith.Entities.Enums.SubmissionStatus.Accepted);
 
                 if (hasSolved) {
                     solvedDates.Add(pod.Date);
@@ -509,20 +503,19 @@ namespace dotnetBitSmith.Services {
             DateOnly currentDateToCheck = today;
 
             if (sortedSolved.Contains(today)) {
-                streak++;
-                currentDateToCheck = yesterday;
+                currentDateToCheck = today;
             } else if (sortedSolved.Contains(yesterday)) {
-                // If they haven't solved today, but solved yesterday, the streak is still alive
                 currentDateToCheck = yesterday;
             } else {
-                return new PoDActivityModel { SolvedDates = sortedSolved.Select(d => d.ToString("yyyy-MM-dd")).ToList(), CurrentStreak = 0 };
+                return new PoDActivityModel { 
+                    SolvedDates = sortedSolved.Select(d => d.ToString("yyyy-MM-dd")).ToList(), 
+                    CurrentStreak = 0 
+                };
             }
 
             // Count backwards from currentDateToCheck
             while (sortedSolved.Contains(currentDateToCheck)) {
-                if (currentDateToCheck != today) {
-                    streak++;
-                }
+                streak++;
                 currentDateToCheck = currentDateToCheck.AddDays(-1);
             }
 

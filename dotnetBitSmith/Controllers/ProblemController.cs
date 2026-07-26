@@ -119,13 +119,42 @@ namespace dotnetBitSmith.Controllers {
 
         [HttpGet("pod")]
         [ProducesResponseType(typeof(ProblemSummaryModel), StatusCodes.Status200OK)]
-        public async Task<ActionResult<ProblemSummaryModel>> GetProblemOfTheDay([FromQuery] string? dateStr) {
+        public async Task<ActionResult<ProblemSummaryModel>> GetProblemOfTheDay(
+            [FromQuery] string? dateStr,
+            [FromServices] dotnetBitSmith.Data.ApplicationDbContext context) 
+        {
             DateOnly date = DateOnly.FromDateTime(DateTime.UtcNow);
             if (!string.IsNullOrEmpty(dateStr) && DateOnly.TryParse(dateStr, out var parsed)) {
                 date = parsed;
             }
             var pod = await _problemService.GetProblemOfTheDayAsync(date);
-            return Ok(pod);
+
+            var result = new ProblemSummaryModel {
+                Id = pod.Id,
+                Title = pod.Title,
+                Slug = pod.Slug,
+                ProblemNumber = pod.ProblemNumber,
+                Difficulty = pod.Difficulty,
+                Categories = pod.Categories,
+                Status = pod.Status
+            };
+
+            if (User.Identity?.IsAuthenticated == true) {
+                try {
+                    var userId = User.GetUserId();
+                    var hasAccepted = await context.Submissions.AnyAsync(s => 
+                        s.UserId == userId && s.ProblemId == pod.Id && s.Status == dotnetBitSmith.Entities.Enums.SubmissionStatus.Accepted);
+                    if (hasAccepted) {
+                        result.Status = "Solved";
+                    } else {
+                        var hasAttempted = await context.Submissions.AnyAsync(s => 
+                            s.UserId == userId && s.ProblemId == pod.Id);
+                        result.Status = hasAttempted ? "Attempted" : "Unattempted";
+                    }
+                } catch { }
+            }
+
+            return Ok(result);
         }
 
         [HttpPost("pod")]
