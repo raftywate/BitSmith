@@ -512,9 +512,50 @@ namespace dotnetBitSmith.Services {
             }
         }
 
+        private static readonly string[] _dangerousPatterns = new[] {
+            "System.IO.File",
+            "System.IO.Directory",
+            "System.IO.Stream",
+            "System.Net.",
+            "System.Net.Http",
+            "System.Diagnostics.Process",
+            "System.Reflection",
+            "System.Runtime.InteropServices",
+            "Environment.GetEnvironmentVariable",
+            "AppContext.GetData",
+            "System.Threading.Thread",
+            "System.Runtime.Loader",
+        };
+
         private async Task<SandboxResult?> TryExecuteCsharpWithRoslynAsync(string wrappedCode, string stdin) {
             var stopwatch = Stopwatch.StartNew();
             try {
+                // Guard 1: Code size limit — reject oversized submissions before touching the compiler.
+                const int MaxCodeBytes = 65_536; // 64 KB
+                if (Encoding.UTF8.GetByteCount(wrappedCode) > MaxCodeBytes) {
+                    stopwatch.Stop();
+                    return new SandboxResult {
+                        Status = "CompileError",
+                        Error = $"Source code exceeds the maximum allowed size of {MaxCodeBytes / 1024} KB.",
+                        ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds
+                    };
+                }
+
+                // Guard 2: Dangerous API blocklist — reject code that uses file I/O, networking,
+                // process execution, or reflection. This is defence-in-depth; the proper long-term
+                // fix is to run Roslyn in a separate sandboxed process.
+                foreach (var pattern in _dangerousPatterns) {
+                    if (wrappedCode.Contains(pattern, StringComparison.OrdinalIgnoreCase)) {
+                        stopwatch.Stop();
+                        return new SandboxResult {
+                            Status = "CompileError",
+                            Error = $"Use of restricted API '{pattern}' is not allowed in this sandbox.",
+                            ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds
+                        };
+                    }
+                }
+
+
                 var syntaxTree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(
                     wrappedCode,
                     new Microsoft.CodeAnalysis.CSharp.CSharpParseOptions(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest)

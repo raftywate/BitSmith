@@ -38,6 +38,9 @@ namespace dotnetBitSmith.Entities {
 
         public DateTime? EmailVerificationOtpExpiry { get; set; }
 
+        /// <summary>Counts consecutive failed OTP verification attempts. Resets to 0 on success or OTP regeneration.</summary>
+        public int OtpAttempts { get; set; } = 0;
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }

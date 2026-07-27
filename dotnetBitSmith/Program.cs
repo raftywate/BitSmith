@@ -30,10 +30,26 @@ const string DEV_CORS_POLICY = "AllowDevOrigin";
 
 builder.Services.AddCors(options => {
     options.AddPolicy(name: DEV_CORS_POLICY, policy => {
-          policy.AllowAnyOrigin()
-                .AllowAnyHeader()
-                .AllowAnyMethod();
-      });
+        var allowedOrigins = builder.Configuration
+            .GetSection("AllowedOrigins")
+            .Get<string[]>();
+
+        if (allowedOrigins != null && allowedOrigins.Length > 0) {
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        } else if (builder.Environment.IsDevelopment()) {
+            // Dev-only fallback: allow the Angular dev server
+            policy.WithOrigins("http://localhost:4200", "https://localhost:4200")
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        } else {
+            // Production fallback: lock to the known domain
+            policy.WithOrigins("https://www.compylr.com", "https://compylr.com")
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        }
+    });
 });
 
 builder.Services.AddControllers()
@@ -305,6 +321,11 @@ using (var scope = app.Services.CreateScope()) {
         context.Database.ExecuteSqlRaw(@"
             ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""EmailVerificationOtpExpiry"" TIMESTAMP NULL;
         ");
+
+        context.Database.ExecuteSqlRaw(@"
+            ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""OtpAttempts"" INTEGER NOT NULL DEFAULT 0;
+        ");
+
         logger.LogInformation("User verification columns verified successfully.");
     } catch (Exception ex) {
         logger.LogError(ex, "Failed to create User verification database columns on startup.");

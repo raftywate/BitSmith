@@ -65,7 +65,8 @@ namespace dotnetBitSmith.Services {
                 UserRole = role,
                 IsEmailVerified = false,
                 EmailVerificationOtp = otp,
-                EmailVerificationOtpExpiry = DateTime.UtcNow.AddMinutes(15)
+                EmailVerificationOtpExpiry = DateTime.UtcNow.AddMinutes(15),
+                OtpAttempts = 0
             };
 
             await _context.Users.AddAsync(user);
@@ -110,6 +111,7 @@ namespace dotnetBitSmith.Services {
                 var otp = random.Next(100000, 999999).ToString();
                 user.EmailVerificationOtp = otp;
                 user.EmailVerificationOtpExpiry = DateTime.UtcNow.AddMinutes(15);
+                user.OtpAttempts = 0; // Reset attempt counter when a fresh OTP is issued
                 await _context.SaveChangesAsync();
 
                 var subject = "Verify your Compylr Account";
@@ -151,15 +153,34 @@ namespace dotnetBitSmith.Services {
                 throw new DuplicateUserException("Email is already verified. Please log in.");
             }
 
-            if (user.EmailVerificationOtp != model.Otp || 
-                user.EmailVerificationOtpExpiry == null || 
-                user.EmailVerificationOtpExpiry < DateTime.UtcNow) {
-                throw new InvalidLoginException("Invalid or expired verification code.");
+            const int MaxOtpAttempts = 5;
+
+            // Check if OTP is locked out (too many failures already consumed/invalidated it)
+            if (user.OtpAttempts >= MaxOtpAttempts) {
+                throw new InvalidLoginException("Too many incorrect attempts. Please request a new verification code.");
             }
 
+            bool otpExpired = user.EmailVerificationOtpExpiry == null || user.EmailVerificationOtpExpiry < DateTime.UtcNow;
+            bool otpWrong   = user.EmailVerificationOtp != model.Otp;
+
+            if (otpExpired || otpWrong) {
+                user.OtpAttempts++;
+                // If this was the 5th bad attempt, explicitly invalidate the OTP so it cannot be used
+                if (user.OtpAttempts >= MaxOtpAttempts) {
+                    user.EmailVerificationOtp = null;
+                    user.EmailVerificationOtpExpiry = null;
+                    await _context.SaveChangesAsync();
+                    throw new InvalidLoginException("Too many incorrect attempts. Please request a new verification code.");
+                }
+                await _context.SaveChangesAsync();
+                throw new InvalidLoginException($"Invalid or expired verification code. {MaxOtpAttempts - user.OtpAttempts} attempt(s) remaining.");
+            }
+
+            // Success — verify the user and reset the counter
             user.IsEmailVerified = true;
             user.EmailVerificationOtp = null;
             user.EmailVerificationOtpExpiry = null;
+            user.OtpAttempts = 0;
             await _context.SaveChangesAsync();
 
             return GenerateJwtToken(user);
@@ -179,6 +200,7 @@ namespace dotnetBitSmith.Services {
             var otp = random.Next(100000, 999999).ToString();
             user.EmailVerificationOtp = otp;
             user.EmailVerificationOtpExpiry = DateTime.UtcNow.AddMinutes(15);
+            user.OtpAttempts = 0; // Reset attempt counter so the user gets fresh tries
             await _context.SaveChangesAsync();
 
             var subject = "Verify your Compylr Account (New Code)";

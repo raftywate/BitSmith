@@ -160,8 +160,8 @@ namespace dotnetBitSmith.Controllers {
         [HttpPost("pod")]
         [Authorize(Roles = "Admin")]
         [ProducesResponseType(typeof(ProblemSummaryModel), StatusCodes.Status200OK)]
-        public async Task<ActionResult<ProblemSummaryModel>> SetProblemOfTheDay([FromQuery] string dateStr, [FromQuery] Guid problemId) {
-            if (!DateOnly.TryParse(dateStr, out var date)) return BadRequest("Invalid date format.");
+        public async Task<ActionResult<ProblemSummaryModel>> SetProblemOfTheDay([FromBody] SetPodModel model) {
+            if (!DateOnly.TryParse(model.DateStr, out var date)) return BadRequest("Invalid date format.");
             
             // Validate that Date is not in the past (allowing for 1 day timezone skew margin)
             DateOnly today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -169,9 +169,11 @@ namespace dotnetBitSmith.Controllers {
                 return BadRequest("Cannot set the Problem of the Day in the past.");
             }
 
-            var pod = await _problemService.SetProblemOfTheDayAsync(date, problemId);
+            var pod = await _problemService.SetProblemOfTheDayAsync(date, model.ProblemId);
             return Ok(pod);
         }
+
+        public record SetPodModel(string DateStr, Guid ProblemId);
 
         [HttpGet("pod/activity")]
         [Authorize]
@@ -280,6 +282,7 @@ namespace dotnetBitSmith.Controllers {
 
 
         [HttpGet("debug-database")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DebugDatabase([FromServices] dotnetBitSmith.Data.ApplicationDbContext context) {
             var filePath = Path.Combine(Directory.GetCurrentDirectory(), "problems.json");
             var exists = System.IO.File.Exists(filePath);
@@ -317,6 +320,7 @@ namespace dotnetBitSmith.Controllers {
         }
 
         [HttpGet("debug-metadata")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DebugMetadata(
             [FromServices] dotnetBitSmith.Data.ApplicationDbContext context,
             [FromQuery] string title = "Reconstruct Itinerary")
@@ -373,6 +377,7 @@ namespace dotnetBitSmith.Controllers {
         }
 
         [HttpPost("generate-test-cases")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GenerateTestCases(
             [FromServices] dotnetBitSmith.Data.ApplicationDbContext context,
             [FromServices] ICompilationService compilationService,
@@ -389,6 +394,7 @@ namespace dotnetBitSmith.Controllers {
         }
 
         [HttpPost("seed-sample-testcases")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> SeedSampleTestCases(
             [FromServices] dotnetBitSmith.Data.ApplicationDbContext context,
             [FromQuery] int limit = 225)
@@ -402,6 +408,7 @@ namespace dotnetBitSmith.Controllers {
         }
 
         [HttpPost("make-all-test-cases-visible")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> MakeAllTestCasesVisible() {
             try {
                 int updatedCount = await _context.Database.ExecuteSqlRawAsync("UPDATE \"TestCases\" SET \"IsHidden\" = false;");
@@ -469,9 +476,23 @@ namespace dotnetBitSmith.Controllers {
             [FromQuery] int mediumLimit = -1,
             [FromQuery] int hardLimit = -1) 
         {
-            var filePath = Path.Combine(Directory.GetCurrentDirectory(), fileName);
+            // Path traversal guard: strip all directory separators, only allow a bare filename.
+            var safeFileName = Path.GetFileName(fileName);
+            if (string.IsNullOrWhiteSpace(safeFileName) || safeFileName != fileName) {
+                return BadRequest("Invalid file name. Only a plain filename (no directory components) is allowed.");
+            }
+
+            var baseDir = Directory.GetCurrentDirectory();
+            var filePath = Path.GetFullPath(Path.Combine(baseDir, safeFileName));
+
+            // Ensure the resolved path is still inside the working directory.
+            if (!filePath.StartsWith(baseDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
+                !filePath.Equals(baseDir, StringComparison.OrdinalIgnoreCase)) {
+                return BadRequest("Access to the requested file path is not allowed.");
+            }
+
             if (!System.IO.File.Exists(filePath)) {
-                return BadRequest($"File not found at: {filePath}");
+                return BadRequest($"File not found: {safeFileName}");
             }
 
             try {

@@ -32,7 +32,7 @@ namespace dotnetBitSmith.Services {
                 Id = user.Id,
                 Bio = user.Bio,
                 Username = user.Username,
-                Email = user.Email,
+                Email = user.Email, // Authenticated user can always see their own email
                 CreatedAt = user.CreatedAt,
                 DisplayName = user.DisplayName,
                 ProfilePictureUrl = user.ProfilePictureUrl,
@@ -122,7 +122,7 @@ namespace dotnetBitSmith.Services {
                 Id = user.Id,
                 Bio = user.Bio,
                 Username = user.Username,
-                Email = user.Email,
+                Email = null, // Do NOT expose email on public profile lookups
                 CreatedAt = user.CreatedAt,
                 DisplayName = user.DisplayName,
                 ProfilePictureUrl = user.ProfilePictureUrl,

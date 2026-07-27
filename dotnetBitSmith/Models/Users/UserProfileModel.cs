@@ -2,7 +2,8 @@ namespace dotnetBitSmith.Models.Users {
     public class UserProfileModel {
         public Guid Id { get; set; }
         public string Username { get; set; }
-        public string Email { get; set; }
+        /// <summary>Only populated for the authenticated user's own profile (/api/user/me). Null for public profile lookups.</summary>
+        public string? Email { get; set; }
         public string? DisplayName { get; set; }
         public string? Bio { get; set; }
         public string? ProfilePictureUrl { get; set; }
