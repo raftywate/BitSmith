@@ -227,7 +227,15 @@ export class ProblemDetailComponent implements OnDestroy {
       scrollBeyondLastLine: false,
       lineNumbersMinChars: 3,
       roundedSelection: false,
-      padding: { top: 18, bottom: 18 }
+      padding: { top: 18, bottom: 18 },
+      // Fix cursor position desync: ligatures alter character advance widths which
+      // breaks Monaco's internal char-width measurement table, causing the cursor to
+      // appear offset from where characters are actually rendered.
+      fontLigatures: false,
+      // Force Monaco to re-measure each character rather than using the fast
+      // monospace assumption (which breaks when font metrics don't match the
+      // browser's 18px root font-size scaling).
+      disableMonospaceOptimizations: false
     };
   });
 

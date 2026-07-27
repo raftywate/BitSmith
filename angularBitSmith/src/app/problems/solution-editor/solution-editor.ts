@@ -57,7 +57,9 @@ export class SolutionEditorComponent implements OnInit {
     lineNumbers: 'on',
     padding: { top: 16, bottom: 16 },
     scrollBeyondLastLine: false,
-    automaticLayout: true
+    automaticLayout: true,
+    fontLigatures: false,
+    disableMonospaceOptimizations: false
   };
 
   previewContent = signal<string>('');
