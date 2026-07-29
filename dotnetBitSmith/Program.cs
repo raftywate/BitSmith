@@ -26,6 +26,14 @@ Environment.SetEnvironmentVariable("DOTNET_USE_POLLING_FILE_WATCHER", "true");
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Environment.WebRootPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot");
+
+// Register Brotli & Gzip Response Compression
+builder.Services.AddResponseCompression(options => {
+    options.EnableForHttps = true;
+    options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+    options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+});
+
 const string DEV_CORS_POLICY = "AllowDevOrigin";
 
 builder.Services.AddCors(options => {
@@ -206,6 +214,7 @@ if (app.Environment.IsDevelopment()) {
 }
 
 app.UseExceptionHandlingMiddleware();
+app.UseResponseCompression();
 app.UseHttpsRedirection();
 app.UseCors(DEV_CORS_POLICY);
 app.UseStaticFiles();
@@ -295,12 +304,47 @@ using (var scope = app.Services.CreateScope()) {
         logger.LogError(ex, "Failed to run automatic database seeding on startup.");
     }
 
-    // Recommendation C: Ensure index existence on local database
-    logger.LogInformation("Verifying and creating composite database indexes...");
+    // Recommendation C: Ensure index existence and column migrations on database
+    logger.LogInformation("Verifying and creating composite database indexes and columns...");
     try {
+        // Add Slug column if missing
+        context.Database.ExecuteSqlRaw(@"
+            ALTER TABLE ""Problems"" ADD COLUMN IF NOT EXISTS ""Slug"" VARCHAR(150) NULL;
+        ");
+
+        // Backfill Slug for existing problems if empty
+        context.Database.ExecuteSqlRaw(@"
+            UPDATE ""Problems"" 
+            SET ""Slug"" = LOWER(REGEXP_REPLACE(REGEXP_REPLACE(""Title"", '[^a-zA-Z0-9\s-]', '', 'g'), '\s+', '-', 'g'))
+            WHERE ""Slug"" IS NULL OR ""Slug"" = '';
+        ");
+
+        // Indexes
+        context.Database.ExecuteSqlRaw(@"
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Problems_Slug"" ON ""Problems"" (""Slug"");
+        ");
+
+        context.Database.ExecuteSqlRaw(@"
+            CREATE INDEX IF NOT EXISTS ""IX_Problems_Difficulty"" ON ""Problems"" (""Difficulty"");
+        ");
+
+        context.Database.ExecuteSqlRaw(@"
+            CREATE INDEX IF NOT EXISTS ""IX_Problems_ProblemNumber"" ON ""Problems"" (""ProblemNumber"");
+        ");
+
         context.Database.ExecuteSqlRaw(@"
             CREATE INDEX IF NOT EXISTS ""IX_Submissions_UserId_ProblemId_Status_CreatedAt"" 
             ON ""Submissions"" (""UserId"", ""ProblemId"", ""Status"", ""CreatedAt"");
+        ");
+
+        context.Database.ExecuteSqlRaw(@"
+            CREATE INDEX IF NOT EXISTS ""IX_Solutions_ProblemId_CreatedAt"" 
+            ON ""Solutions"" (""ProblemId"", ""CreatedAt"");
+        ");
+
+        context.Database.ExecuteSqlRaw(@"
+            CREATE INDEX IF NOT EXISTS ""IX_Comments_SolutionId_CreatedAt"" 
+            ON ""Comments"" (""SolutionId"", ""CreatedAt"");
         ");
 
         context.Database.ExecuteSqlRaw(@"

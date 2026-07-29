@@ -42,12 +42,13 @@ namespace dotnetBitSmith.Services {
 
         public async Task<ProblemDetailModel> GetProblemBySlugAsync(string slug, Guid? userId = null) {
             _logger.LogInformation("Fetching problem details for slug {Slug}", slug);
-            var problemLookup = await _context.Problems
+            var normalizedSlug = slug.ToLowerInvariant();
+            var matchedProblem = await _context.Problems
                 .AsNoTracking()
-                .Select(p => new { p.Id, p.Title })
-                .ToListAsync();
-            var matchedProblem = problemLookup
-                .FirstOrDefault(p => GenerateSlug(p.Title).Equals(slug, System.StringComparison.OrdinalIgnoreCase));
+                .Where(p => p.Slug == normalizedSlug || p.Title.ToLower() == normalizedSlug)
+                .Select(p => new { p.Id })
+                .FirstOrDefaultAsync();
+
             if (matchedProblem == null) {
                 throw new NotFoundException("Problem with slug " + slug + " not found.");
             }
@@ -109,13 +110,10 @@ namespace dotnetBitSmith.Services {
                         Id = pc.Category != null ? pc.Category.Id : Guid.Empty,
                         Name = pc.Category != null ? pc.Category.Name : "Unknown",
                         Slug = pc.Category != null ? pc.Category.Slug : "unknown"
-                    }).ToList()
+                    }).ToList(),
+                    Slug = !string.IsNullOrEmpty(p.Slug) ? p.Slug : GenerateSlug(p.Title)
                 })
                 .ToListAsync();
-
-            foreach (var p in problems) {
-                p.Slug = GenerateSlug(p.Title);
-            }
 
             if (parameters.UserId.HasValue) {
                 var problemIds = problems.Select(p => p.Id).ToList();
@@ -246,6 +244,7 @@ namespace dotnetBitSmith.Services {
                 var problem = new Problem {
                     Id = Guid.NewGuid(),
                     Title = model.Title,
+                    Slug = GenerateSlug(model.Title),
                     Description = model.Description,
                     Difficulty = model.Difficulty,
                     StarterCode = model.StarterCode,
@@ -306,6 +305,7 @@ namespace dotnetBitSmith.Services {
                     ?? throw new NotFoundException("Problem not found.");
 
                 problem.Title = model.Title;
+                problem.Slug = GenerateSlug(model.Title);
                 problem.Description = model.Description;
                 problem.Difficulty = model.Difficulty;
                 problem.StarterCode = model.StarterCode;

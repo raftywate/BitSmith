@@ -12,6 +12,7 @@ using dotnetBitSmith.Data;
 using dotnetBitSmith.Entities;
 using dotnetBitSmith.Entities.Enums;
 using dotnetBitSmith.Models.Problems;
+using dotnetBitSmith.Services;
 
 namespace dotnetBitSmith.Helpers {
     public static class ProblemSeeder {
@@ -179,6 +180,7 @@ namespace dotnetBitSmith.Helpers {
                         Id = Guid.NewGuid(),
                         ProblemNumber = currentSeqNumber, // Assign sequential number
                         Title = problemJson.Title,
+                        Slug = ProblemService.GenerateSlug(problemJson.Title),
                         Description = problemJson.Content,
                         Difficulty = difficulty,
                         StarterCode = starterCode,

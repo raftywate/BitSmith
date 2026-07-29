@@ -98,10 +98,31 @@ namespace dotnetBitSmith.Data {
             modelBuilder.Entity<Vote>()
                 .HasIndex(v => new { v.EntityId, v.EntityType });
 
-            // 6. Configure composite indexes for performance tuning
+            // 6. Configure composite and performance tuning indexes
+            modelBuilder.Entity<Problem>()
+                .HasIndex(p => p.Slug)
+                .IsUnique()
+                .HasDatabaseName("IX_Problems_Slug");
+
+            modelBuilder.Entity<Problem>()
+                .HasIndex(p => p.Difficulty)
+                .HasDatabaseName("IX_Problems_Difficulty");
+
+            modelBuilder.Entity<Problem>()
+                .HasIndex(p => p.ProblemNumber)
+                .HasDatabaseName("IX_Problems_ProblemNumber");
+
             modelBuilder.Entity<Submission>()
                 .HasIndex(s => new { s.UserId, s.ProblemId, s.Status, s.CreatedAt })
                 .HasDatabaseName("IX_Submissions_UserId_ProblemId_Status_CreatedAt");
+
+            modelBuilder.Entity<Solution>()
+                .HasIndex(s => new { s.ProblemId, s.CreatedAt })
+                .HasDatabaseName("IX_Solutions_ProblemId_CreatedAt");
+
+            modelBuilder.Entity<Comment>()
+                .HasIndex(c => new { c.SolutionId, c.CreatedAt })
+                .HasDatabaseName("IX_Comments_SolutionId_CreatedAt");
 
             modelBuilder.Entity<ProblemOfTheDay>()
                 .HasIndex(p => p.Date)
