@@ -247,11 +247,19 @@ export class ProblemList implements OnInit {
         });
     }
 
+    isRowTopicsVisible(problemId: string): boolean {
+        const isGloballyShown = this.showRowTopics();
+        const isIndividuallyToggled = this.revealedRows().has(problemId);
+        return isGloballyShown ? !isIndividuallyToggled : isIndividuallyToggled;
+    }
+
     toggleRowTopics() {
         this.showRowTopics.update(v => !v);
+        this.revealedRows.set(new Set<string>());
     }
 
     toggleRowReveal(event: Event, problemId: string) {
+        event.preventDefault();
         event.stopPropagation();
         this.revealedRows.update(set => {
             const newSet = new Set(set);

@@ -5,6 +5,7 @@ import { Footer } from './layout/footer/footer';
 import { ToastComponent } from './components/toast/toast';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
+import { ThemeService } from './services/theme';
 
 @Component({
   selector: 'app-root',
@@ -14,6 +15,7 @@ import { filter } from 'rxjs';
 })
 export class App {
   private readonly router = inject(Router);
+  private readonly themeService = inject(ThemeService);
 
   protected readonly isWorkspaceRoute = signal(this.matchesWorkspaceRoute(this.router.url));
 

@@ -138,6 +138,28 @@
                 }
             </div>
             } @else {
+            <div class="theme-switch" style="margin-right: 0.25rem;">
+                <button type="button" class="theme-switch__button"
+                    [class.theme-switch__button--active]="themeService.currentTheme() === 'light'"
+                    (click)="themeService.setLightTheme()" title="Light">
+                    Light
+                </button>
+                <button type="button" class="theme-switch__button"
+                    [class.theme-switch__button--active]="themeService.currentTheme() === 'dark'"
+                    (click)="themeService.setDarkTheme()" title="Dark">
+                    Dark
+                </button>
+                <button type="button" class="theme-switch__button"
+                    [class.theme-switch__button--active]="themeService.currentTheme() === 'black'"
+                    (click)="themeService.setBlackTheme()" title="Black">
+                    Black
+                </button>
+                <button type="button" class="theme-switch__button"
+                    [class.theme-switch__button--active]="themeService.currentTheme() === 'system'"
+                    (click)="themeService.setSystemTheme()" title="Auto">
+                    Auto
+                </button>
+            </div>
             <a routerLink="/login" class="btn btn--ghost">Login</a>
             <a routerLink="/register" class="btn btn--primary">Create account</a>
             }

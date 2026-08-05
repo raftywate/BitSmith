@@ -209,7 +209,7 @@
         <span class="problem-row__title" style="display: flex; flex-direction: column; align-items: flex-start; gap: 0.2rem;">
           <span class="eyebrow" style="color: #00b8a3; font-size: 0.65rem; margin-bottom: 0;">Problem of the Day</span>
           <strong>{{ pod()?.title }}</strong>
-          @if (showRowTopics() || revealedRows().has(pod()!.id)) {
+          @if (pod() && isRowTopicsVisible(pod()!.id)) {
             <small>{{ pod()?.categories?.length ?? 0 }} topic{{ pod()?.categories?.length !== 1 ? 's' : '' }}</small>
           }
         </span>
@@ -221,7 +221,7 @@
           </span>
         </span>
         <span class="problem-row__tags-cell" (click)="toggleRowReveal($event, pod()!.id)" style="position: relative; display: flex; align-items: center; min-height: 2.2rem; width: 100%; cursor: pointer;">
-          <span class="problem-row__tags" [class.problem-row__tags--hidden]="!showRowTopics() && !revealedRows().has(pod()!.id)">
+          <span class="problem-row__tags" [class.problem-row__tags--hidden]="!pod() || !isRowTopicsVisible(pod()!.id)">
             @for (category of pod()?.categories?.slice(0, 3) || []; track category.id) {
             <span class="pill">{{ category.name }}</span>
             }
@@ -247,7 +247,7 @@
         <span class="problem-row__number">{{ problem.problemNumber }}</span>
         <span class="problem-row__title">
           <strong>{{ problem.title }}</strong>
-          @if (showRowTopics() || revealedRows().has(problem.id)) {
+          @if (isRowTopicsVisible(problem.id)) {
             <small>{{ problem.categories.length }} topic{{ problem.categories.length !== 1 ? 's' : '' }}</small>
           }
         </span>
@@ -259,7 +259,7 @@
           </span>
         </span>
         <span class="problem-row__tags-cell" (click)="toggleRowReveal($event, problem.id)" style="position: relative; display: flex; align-items: center; min-height: 2.2rem; width: 100%; cursor: pointer;">
-          <span class="problem-row__tags" [class.problem-row__tags--hidden]="!showRowTopics() && !revealedRows().has(problem.id)">
+          <span class="problem-row__tags" [class.problem-row__tags--hidden]="!isRowTopicsVisible(problem.id)">
             @for (category of problem.categories.slice(0, 3); track category.id) {
             <span class="pill">{{ category.name }}</span>
             }

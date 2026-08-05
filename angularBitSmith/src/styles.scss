@@ -28,6 +28,33 @@
   --editor-border: rgba(64, 90, 120, 0.14);
 }
 
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg-app: #141414;
+    --bg-app-alt: #141414;
+    --surface-1: #1e1e1e;
+    --surface-2: #242424;
+    --surface-3: #2a2a2a;
+    --surface-inset: rgba(255, 255, 255, 0.03);
+    --text-strong: #eff0f6;
+    --text-body: #d4d4d8;
+    --text-muted: #a3a3a3;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --accent: #33c7b7;
+    --accent-strong: #1da495;
+    --accent-secondary: #ff9e63;
+    --accent-soft: rgba(51, 199, 183, 0.14);
+    --shadow-soft: 0 16px 36px rgba(0, 0, 0, 0.4);
+    --shadow-hard: 0 24px 64px rgba(0, 0, 0, 0.6);
+    --status-easy: #2fd399;
+    --status-medium: #f4b860;
+    --status-hard: #ff8f8f;
+    --status-info: #7dd3fc;
+    --editor-bg: #181818;
+    --editor-border: rgba(255, 255, 255, 0.08);
+  }
+}
+
 :root[data-theme='dark'] {
   --bg-app: #141414;
   --bg-app-alt: #141414;
